@@ -119,6 +119,13 @@ Handled automatically by `.claude/settings.json` SessionStart hook, which:
 If the hook fails (network, conflict), stop and resolve before coding. Do
 not bypass.
 
+**Mid-session re-sync:** when the user says "refresh the repo", "refresh
+the repo file context", "re-sync", or "pull latest", run the `/refresh`
+slash command (see `.claude/commands/refresh.md`). It performs the same
+ritual and produces a ≤5-line summary of what changed, who holds what,
+and the single most impactful next action. See also `CLAUDE.md` which
+every Claude Code instance auto-loads at session start.
+
 ### Step 2 — Claim
 Before your first edit, create or update `.locks/<LANE>.json`:
 
