@@ -1,0 +1,16 @@
+{
+  "name": "304 — Card Game",
+  "short_name": "304",
+  "description": "Sri Lankan trick-taking card game. Mobile-first multiplayer.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#083a22",
+  "theme_color": "#0d4a2b",
+  "categories": ["games"],
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

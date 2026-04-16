@@ -15,23 +15,48 @@
 - [x] `server.js` — Express + Socket.IO room manager with AI pacing
 - [x] `public/` — vanilla HTML/CSS/JS client (landing, lobby, table)
 - [x] `Dockerfile`, `railway.json`, `.dockerignore` — Railway deployment
+- [x] **Invite-link flow** — `?room=X&name=Y` auto-join + share button
+      (Web Share API with clipboard fallback).
+- [x] **Sound effects + haptics** — Web Audio synthesized tones for card
+      play / trick win / bid / turn ping / illegal / game over; vibrate
+      patterns via Vibration API. Mute toggle persisted.
+- [x] **Animations** — card drop with overshoot, staggered deal-in,
+      trick-collect sweep to winner, winner pulse ring, prefers-reduced-motion
+      fallback.
+- [x] **Trick history viewer** — engine tracks per-hand history; modal
+      lists each trick's cards, winner, and points.
+- [x] **Bid history strip** + **contract strip** during play
+      (maker / bid / trump / maker running points / tricks).
+- [x] **Turn timer + active-seat spotlight** — server stamps
+      `turnStartedAt` + `serverNow`; client renders soft progress bar
+      (20-30s windows by phase). Display-only; no auto-kick for humans.
+- [x] **Persistent client ID + robust reconnection** — UUID in
+      `localStorage` (`p304.cid`); server indexes `clientId → seat`;
+      auto-reconnect with infinite attempts + exponential backoff;
+      auto-resume last room on cold load; reconnecting overlay.
+- [x] **PWA manifest + icons** — `manifest.webmanifest`, SVG icons
+      (any + maskable), iOS/Android meta tags. Installable to home screen.
 
 ## Next up
 
 **Start here if you are a fresh instance:**
 
-1. **Interactive play-through in a real mobile browser.** `npm install`,
-   `npm start`, open `http://<laptop-ip>:3000` on a phone. Create room,
-   add 3 AIs, play a full hand. Verify no view-leak bugs (face-down cards
-   leaking rank/suit to opponents, trump indicator visible to non-makers).
-2. **Deploy to Railway.** Push branch, create Railway project, confirm
-   healthcheck passes. See `docs/DEPLOYMENT.md`.
-3. **Invite-link flow for 2nd human.** Today the 2nd player can join by
-   typing the room code. Add a share button that copies a URL like
-   `https://<domain>/?room=ABCDEF&name=Dad` — client auto-joins.
-4. **Polish:** card deal animation, trick collection animation, trump reveal
-   flourish, sound effects (card play, trick won, token transfer).
-5. **PCC (Partner Close Caps)** 3-player mechanics — currently deferred;
+1. **Accessibility polish** — aria-label per card ("Jack of Spades,
+   playable"), `aria-live="polite"` on trick + bid-history, larger hit
+   boxes around fanned cards (they overlap today), keyboard support
+   for card selection.
+2. **Smarter AI** — track voids (when opponent fails to follow),
+   count played honors per suit, partner-aware leads (don't trump
+   partner's winner, lead partner's signalled suit), simple Monte
+   Carlo sampling for end-game.
+3. **Engine unit tests + server input-validation hardening** — formal
+   `tests/` directory with per-module tests (cards, compare,
+   winningIndex, bid flow, face-down leak-safety). Server: bound
+   bid amounts, room codes, names; rate-limit `action` events.
+4. **Interactive play-through in a real mobile browser.** `npm install`,
+   `npm start`, open `http://<laptop-ip>:3000` on a phone. Verify no
+   view-leak bugs end-to-end with the new animations/timers.
+5. **PCC (Partner Close Caps)** 3-player mechanics — deferred;
    see `docs/RULES.md#partner-close-caps-pcc`.
 
 ## Verification status
@@ -52,10 +77,11 @@ All passing as of commit 2b9e265 (2026-04-16).
 - Caps timing penalties (Wrong Caps -2, Losing after Caps -5). Currently we
   use the "all 8 tricks = 5 tokens automatic" house rule instead.
 - Reconnection persistence across server restart (needs a KV store).
-- Sound effects (card play, trick won, token transfer).
-- Animations: dealing, card flip on reveal, token slide.
+  Current reconnection handles socket drops & tab reloads but not a
+  server restart — state lives in process memory only.
 - Chat box for humans to message each other.
 - i18n (Sinhala, Tamil).
+- Service-worker offline shell cache (manifest + icons shipped; no SW yet).
 
 ## Known rule gaps still to resolve with user
 

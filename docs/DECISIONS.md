@@ -125,3 +125,55 @@ within that round.
 
 *Append new entries below this line. Do not modify prior entries — if a
 decision is reversed, add a new entry that references and supersedes it.*
+
+---
+
+## 2026-04-16 — Synthesize audio via Web Audio, not ship sample files
+
+**Decision:** All game sounds (card play, trick won, bid, turn ping, illegal,
+game over) are generated at runtime with `OscillatorNode` + noise buffers
+in `public/fx.js`.
+
+**Alternatives:** Ship `.mp3`/`.ogg` samples in `public/audio/`.
+
+**Rationale:** Zero binary assets keeps the repo small and Railway cold-start
+fast. Web Audio has lower latency than `<audio>` tags — critical for card
+taps. Muting is trivial (a single flag gates scheduling). The short,
+synthesized tones fit the minimal aesthetic and are trivially remixable.
+
+---
+
+## 2026-04-16 — Persistent clientId for reconnection, not name-matching
+
+**Decision:** Client generates a UUID stored in `localStorage` as
+`p304.cid` and sends it in the Socket.IO `auth` handshake and in
+`createRoom` / `joinRoom` payloads. Server maintains a `clientId → {room, seat}`
+map so reconnects rebind to the original seat automatically.
+
+**Alternatives:** Match by display name (prior behaviour on `resume` event);
+require the player to re-enter a room code.
+
+**Rationale:** Name-matching fails when two players share a name, when a
+player changes their name mid-session, or when the player comes back from
+a URL that doesn't pre-fill the name. A stable per-device UUID is
+unambiguous and survives socket drops, tab reloads, and cold page loads.
+State still lives only in server memory, so a server restart still loses
+the binding — acceptable for this scope.
+
+---
+
+## 2026-04-16 — Soft turn timer, display-only for humans
+
+**Decision:** Server stamps `turnStartedAt` + `serverNow` on every
+broadcast view. Client renders a progress bar beside the active player
+with phase-dependent windows (20s play, 30s bid). No auto-action is
+forced on human players when the timer elapses.
+
+**Alternatives:** Hard timeout that plays the lowest legal card or passes
+automatically; tournament-style chess clocks.
+
+**Rationale:** Target audience is a son and his dad playing casually — a
+hard kick is punishing. The visible timer is enough social pressure to
+keep pacing brisk; AI already acts within 600-1200ms. If tournament use
+ever emerges, we can add a `tournamentMode` flag to escalate to
+auto-play.

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="40%" r="80%">
+      <stop offset="0%" stop-color="#0d4a2b"/>
+      <stop offset="80%" stop-color="#083a22"/>
+      <stop offset="100%" stop-color="#062a19"/>
+    </radialGradient>
+  </defs>
+  <!-- Safe zone: keep logo within central 80% circle -->
+  <rect width="512" height="512" fill="url(#g)"/>
+  <text x="256" y="300" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="180" fill="#e6c86a" letter-spacing="6">304</text>
+</svg>

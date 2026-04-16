@@ -51,7 +51,11 @@ Browser (phone)                            Railway (Node)
     ├── index.html            # Single-page app shell
     ├── styles.css            # Mobile-first styles
     ├── client.js             # Socket.IO client, UI state, renderers
-    └── cards.js              # Card SVG/DOM rendering helpers
+    ├── cards.js              # Card DOM rendering helpers
+    ├── fx.js                 # Web Audio sound FX + Vibration API haptics
+    ├── manifest.webmanifest  # PWA manifest
+    ├── icon.svg              # PWA icon (any purpose)
+    └── icon-maskable.svg     # PWA icon (maskable)
 ```
 
 ## Data Flow (typical turn)
@@ -124,9 +128,14 @@ type PlayerView = GameState & {
   handCounts: [number, number, number, number],
   trumpIndicator: Card|null,                  // set only if you are trump maker
                                               // or it has been revealed
-  currentTrick: PlayedCard[]                  // face-down cards show {hidden:true}
+  currentTrick: PlayedCard[],                 // face-down cards show {hidden:true}
                                               // (except to the trump maker who can
                                               //  inspect at trick end)
+  trickPoints: [number, number],              // running maker-team / opp-team points
+  trickHistory: Trick[],                      // prior tricks this hand (face-down
+                                              // cards remain hidden per view rules)
+  turnStartedAt: number,                      // server ms epoch; for turn timer
+  serverNow: number,                          // server clock for skew correction
 };
 ```
 
@@ -147,8 +156,12 @@ First leader: `nextPlayer(dealer)`.
    - `joinRoom(code)` → server places player in first empty seat (typically 2,
      so they're partnered with creator). Supports manual seat pick later.
    - `startGame` → host initiates; empty seats become AI.
-2. Mid-game disconnect: seat remains; if the player reconnects with the
-   same room code + name, they resume. Otherwise AI takes over temporarily.
+2. Mid-game disconnect: seat remains; clients send a persistent `clientId`
+   (UUID stored in `localStorage` as `p304.cid`) in the Socket.IO handshake
+   and in every room-entry payload. The server keeps a `clientId → {room, seat}`
+   map and auto-rebinds when a reconnecting socket shows up with a known
+   `clientId`. Tab reload / cold page load also attempts an auto-resume
+   using the last `p304.room` value.
 3. Room is destroyed when:
    - All humans have disconnected for > 10 minutes, or
    - Host ends the game.

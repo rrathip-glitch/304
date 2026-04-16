@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#0d4a2b"/>
+      <stop offset="80%" stop-color="#083a22"/>
+      <stop offset="100%" stop-color="#062a19"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="80" ry="80" fill="url(#g)"/>
+  <g transform="translate(256 256)">
+    <g transform="rotate(-14) translate(-70 -90)">
+      <rect width="140" height="200" rx="14" fill="#f7f1df" stroke="#d6cfbd" stroke-width="2"/>
+      <text x="14" y="40" font-family="Georgia, serif" font-weight="700" font-size="38" fill="#111">J</text>
+      <text x="14" y="72" font-family="Georgia, serif" font-size="28" fill="#111">&#9824;</text>
+      <text x="70" y="130" text-anchor="middle" font-family="Georgia, serif" font-size="96" fill="#111">&#9824;</text>
+    </g>
+    <g transform="rotate(14) translate(-70 -90)">
+      <rect width="140" height="200" rx="14" fill="#f7f1df" stroke="#d6cfbd" stroke-width="2" opacity="0.97"/>
+      <text x="14" y="40" font-family="Georgia, serif" font-weight="700" font-size="38" fill="#c6352c">9</text>
+      <text x="14" y="72" font-family="Georgia, serif" font-size="28" fill="#c6352c">&#9829;</text>
+      <text x="70" y="130" text-anchor="middle" font-family="Georgia, serif" font-size="96" fill="#c6352c">&#9829;</text>
+    </g>
+  </g>
+  <text x="256" y="470" text-anchor="middle" font-family="Georgia, serif" font-weight="700" font-size="64" letter-spacing="6" fill="#e6c86a">304</text>
+</svg>
