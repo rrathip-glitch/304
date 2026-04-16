@@ -1,11 +1,11 @@
 {
   "lane": "L1",
-  "status": "WIP",
+  "status": "DONE",
   "session_id": "cse_01FaeKqv5f1h3akTobnq5SRZ",
   "agent": "Claude",
   "started_utc": "2026-04-16T19:41:16Z",
-  "heartbeat_utc": "2026-04-16T20:02:16Z",
-  "task": "src/engine/game.js — state machine, phase by phase",
+  "heartbeat_utc": "2026-04-16T20:17:01Z",
+  "task": "game.js state machine shipped across 4 slices + smoke test; points sum to 304 every hand; game_over reached at tokens 22/0",
   "touches": [],
   "notes": ""
 }

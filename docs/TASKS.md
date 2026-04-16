@@ -9,27 +9,30 @@
 - [x] Documentation suite (SOUL, RULES, ARCHITECTURE, API, TASKS, DECISIONS)
 - [x] `src/engine/cards.js` — deck, ranks, points (integer ×10 internal),
       compare, winningIndex, legalCards, displayPoints
+- [x] Orchestration infrastructure (`COLLABORATION.md`, `CLAUDE.md`,
+      `.claude/hooks/`, `scripts/orchestrate.sh`, `.locks/`) — milestone M0,
+      PR #1.
+- [x] `src/engine/game.js` — full state machine: createGame, seatPlayer,
+      startHand, applyAction, legalActions, viewFor. Phases bid4,
+      trump_pick1, bid8, trump_pick2, open_choice, play, inspect,
+      hand_end, game_over all implemented. Scoring with token transfer
+      and high-court override. Smoke-tested via `scripts/smoke-engine.js`
+      — milestone M1.
 
 ## Next up
 
 **Start here if you are a fresh instance:**
 
-1. Build `src/engine/game.js` — full state machine implementing `docs/RULES.md`.
-   Entry points:
-   - `createGame()` — returns initial state.
-   - `seatPlayer(state, { seat, name, isAI })`
-   - `startHand(state)` — deal first 4, move to `bid4`.
-   - `applyAction(state, seat, action)` — returns new state + events.
-   - `legalActions(state, seat)` — returns array of action templates.
-   - `viewFor(state, seat)` — returns filtered `PlayerView`.
-   Phases to implement: `bid4 → trump_pick1 → bid8 → trump_pick2? →
-   open_choice → play → inspect → hand_end → (next hand or game_over)`.
-2. Build `src/engine/ai.js`:
+1. Build `src/engine/ai.js`:
    - `chooseAction(state, seat)` — returns an action given legal actions.
    - Bidding heuristic per `docs/RULES.md#ai-betting-heuristics`.
    - Play heuristic: follow suit with lowest winning card; if can't win, play
      lowest; trump cautiously; track played cards.
-3. Build `server.js`:
+   Entry points match `src/engine/game.js` — use `G.legalActions(state, seat)`
+   as the source of truth. Acceptance: `node scripts/smoke-engine.js` rigged
+   to drive all four seats via `ai.chooseAction` completes 100 hands with no
+   illegal-move rejections.
+2. Build `server.js`:
    - Express static file serving for `public/`.
    - Socket.IO room manager per `docs/API.md`.
    - Scheduled AI ticks with 600–1200ms delay for natural pacing.
