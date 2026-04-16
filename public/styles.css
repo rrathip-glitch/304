@@ -499,3 +499,190 @@ button { cursor: pointer; }
   }
   .landing-card { max-width: 420px; padding: 32px 28px; }
 }
+
+/* ================================================================
+   UI POLISH — appended additions
+   ================================================================ */
+
+/* ---------- 1. Safe-area insets (iOS notch / home indicator) ---------- */
+/* Use env(safe-area-inset-*) so content avoids the notch on top and
+   the home-indicator strip on the bottom. We apply generous padding
+   to the landing/lobby screens and a dedicated bottom inset to the
+   fixed action bar so buttons aren't obscured by the home indicator. */
+html, body {
+  /* fall back to 0 when env() is unsupported */
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+}
+
+#landing,
+#lobby {
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+#app.screen-table {
+  /* keep the table itself edge-to-edge, but push head/action-bar
+     away from the unsafe areas */
+  padding-top: 0;
+  padding-bottom: 0;
+}
+#app.screen-table .table-head {
+  padding-top: calc(6px + env(safe-area-inset-top, 0px));
+}
+#app.screen-table .action-bar {
+  /* MUST respect env(safe-area-inset-bottom) so the home indicator
+     never overlaps the action buttons. */
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+}
+#app.screen-table .log-wrap {
+  padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ---------- 2. Card deal animation ---------- */
+/* Cards translate in from off-screen-center and scale up to rest. */
+/* NOTE: client.js sets `animation-delay` inline per-card to stagger
+   the deal across the hand — do not hard-code a delay here. */
+@keyframes cardDeal {
+  0% {
+    transform: translate(0, -200px) scale(0.8);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+}
+.card.dealing {
+  animation: cardDeal 300ms ease-out both;
+}
+
+/* ---------- 3. Trick-won pulse ---------- */
+/* Brief highlight pulse on the winning card at the end of a trick. */
+@keyframes trickWon {
+  0% {
+    box-shadow: var(--shadow);
+    transform: scale(1);
+  }
+  30% {
+    box-shadow: 0 0 0 4px var(--gold), 0 0 24px 8px rgba(230, 200, 106, 0.55);
+    transform: scale(1.08);
+  }
+  70% {
+    box-shadow: 0 0 0 3px var(--gold), 0 0 18px 6px rgba(230, 200, 106, 0.35);
+    transform: scale(1.04);
+  }
+  100% {
+    box-shadow: var(--shadow);
+    transform: scale(1);
+  }
+}
+.card.trick-winner {
+  animation: trickWon 500ms ease;
+}
+
+/* ---------- 4. Token transfer animation ---------- */
+/* Translate a token pip between team trays. The client MAY use this
+   by temporarily positioning a pip and applying `.token-sliding`. */
+@keyframes tokenSlide {
+  0% {
+    transform: translate(var(--token-from-x, 0), var(--token-from-y, 0)) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(
+      calc((var(--token-from-x, 0px) + var(--token-to-x, 0px)) / 2),
+      calc((var(--token-from-y, 0px) + var(--token-to-y, 0px)) / 2 - 20px)
+    ) scale(1.4);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--token-to-x, 0), var(--token-to-y, 0)) scale(1);
+    opacity: 1;
+  }
+}
+.pip.token-sliding {
+  animation: tokenSlide 400ms ease-in-out both;
+  will-change: transform;
+}
+
+/* ---------- 5. Active-player indicator ---------- */
+/* A seat gets `.seat.active` when that player is the current actor.
+   The box-shadow ring oscillates for a subtle attention pulse. */
+@keyframes activePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(230, 200, 106, 0.35), 0 0 8px rgba(230, 200, 106, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(230, 200, 106, 0.8), 0 0 14px rgba(230, 200, 106, 0.45);
+  }
+}
+.seat.active,
+.seat-slot.active {
+  border-radius: 10px;
+  outline: none;
+  animation: activePulse 1.6s ease-in-out infinite;
+}
+
+/* ---------- 6. Responsive tweaks ---------- */
+/* Use small-viewport-height so the mobile URL bar doesn't cause
+   overflow on the table. Progressive enhancement: svh overrides vh
+   when supported. */
+@supports (height: 100svh) {
+  #app { min-height: 100svh; }
+  #app.screen-table { height: 100svh; }
+  #landing { min-height: 100svh; }
+  @media (min-width: 768px) {
+    #app.screen-table { height: 100svh; }
+  }
+}
+
+/* Hand scroll-snap: flicking the fanned hand snaps card-by-card. */
+.your-hand {
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: 8px;
+}
+.your-hand .card {
+  scroll-snap-align: start;
+}
+
+/* ---------- 7. Theme refinement ---------- */
+/* Ensure tokens and text remain legible on both the felt-green table
+   background and the cream card faces. */
+.pip {
+  /* subtle dark ring so light pips read on green and dark pips read on cream */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.team-0 .pip {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.card .card-rank,
+.card .card-rank-bl,
+.card .card-center {
+  /* gently reinforce contrast against the cream background */
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.card.color-red {
+  /* nudge red toward AA contrast on cream */
+  color: #b12a22;
+}
+.seat-name,
+.seat-bid,
+.hint,
+.phase-banner {
+  /* drop a faint shadow so cream/dim text stays legible on felt */
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- 8. Tap feedback ---------- */
+/* Instant visual ack on tap — don't wait for server roundtrip. */
+.card.legal:active {
+  transform: translateY(-4px);
+  transition: transform 60ms ease-out;
+}
+.your-hand .card.legal:active {
+  transform: translateY(-12px);
+}
