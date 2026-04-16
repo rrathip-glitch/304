@@ -4,7 +4,31 @@
 (function () {
   'use strict';
 
-  const socket = io();
+  // Persistent per-device client ID used by the server to resume seats.
+  function getClientId() {
+    try {
+      let cid = localStorage.getItem('p304.cid');
+      if (!cid) {
+        cid = (window.crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 'c_' + Math.random().toString(36).slice(2) + '_' + Date.now().toString(36);
+        localStorage.setItem('p304.cid', cid);
+      }
+      return cid;
+    } catch (e) {
+      return 'c_' + Math.random().toString(36).slice(2);
+    }
+  }
+  const clientId = getClientId();
+
+  const socket = io({
+    auth: { clientId },
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 500,
+    reconnectionDelayMax: 5000,
+    randomizationFactor: 0.5,
+  });
 
   // ---- UI state -------------------------------------------------------------
   const state = {
@@ -76,7 +100,16 @@
     const name = (urlName || nameInput.value.trim());
     state.name = name;
     try { localStorage.setItem('p304.name', name); } catch (e) {}
-    socket.emit('joinRoom', { roomId: urlRoom, name });
+    socket.emit('joinRoom', { roomId: urlRoom, name, clientId });
+  } else {
+    // Auto-resume from last session (server rejects silently if stale).
+    try {
+      const lastRoom = localStorage.getItem('p304.room');
+      const savedName = localStorage.getItem('p304.name');
+      if (lastRoom && savedName) {
+        socket.emit('joinRoom', { roomId: lastRoom, name: savedName, clientId });
+      }
+    } catch (e) { /* ignore */ }
   }
 
   $('#create-btn').addEventListener('click', () => {
@@ -84,7 +117,7 @@
     if (!name) { toast('Enter your name first'); return; }
     state.name = name;
     try { localStorage.setItem('p304.name', name); } catch (e) {}
-    socket.emit('createRoom', { name });
+    socket.emit('createRoom', { name, clientId });
   });
 
   $('#join-btn').addEventListener('click', () => {
@@ -94,7 +127,7 @@
     if (!roomId) { toast('Enter a room code'); return; }
     state.name = name;
     try { localStorage.setItem('p304.name', name); } catch (e) {}
-    socket.emit('joinRoom', { roomId, name });
+    socket.emit('joinRoom', { roomId, name, clientId });
   });
 
   // Share invite link
@@ -126,6 +159,26 @@
     return loc.origin + loc.pathname + '?room=' + encodeURIComponent(roomId);
   }
 
+  // Turn-timer animation loop. Window per phase; soft display-only for humans.
+  const TURN_WINDOW_MS = { bid4: 30000, bid8: 30000, trump_pick1: 25000, trump_pick2: 25000, open_choice: 20000, play: 20000, inspect: 10000, default: 20000 };
+  function tickTimers() {
+    const v = state.view;
+    if (!v) return;
+    const win = TURN_WINDOW_MS[v.phase] || TURN_WINDOW_MS.default;
+    const started = v.turnStartedAt || Date.now();
+    const serverOffset = (v.serverNow || Date.now()) - Date.now();
+    const elapsed = Math.max(0, Date.now() + serverOffset - started);
+    const frac = Math.max(0, Math.min(1, 1 - elapsed / win));
+    document.querySelectorAll('.turn-timer').forEach((el) => {
+      const fill = el.querySelector('.fill');
+      if (!fill) return;
+      fill.style.transform = 'scaleX(' + frac.toFixed(3) + ')';
+      el.classList.toggle('warn', frac < 0.3 && frac >= 0.15);
+      el.classList.toggle('danger', frac < 0.15);
+    });
+  }
+  setInterval(tickTimers, 250);
+
   // Unlock audio on first user gesture (iOS/Safari requirement).
   function unlockFXOnce() {
     try { if (window.FX) FX.unlock(); } catch (e) {}
@@ -152,14 +205,36 @@
   }
 
   // ---- Socket listeners -----------------------------------------------------
-  socket.on('connect', () => { /* connected */ });
+  const reconnectOverlay = $('#reconnect-overlay');
+  let reconnectDelayTimer = null;
+  function showReconnecting() {
+    if (reconnectOverlay) reconnectOverlay.classList.remove('hidden');
+  }
+  function hideReconnecting() {
+    if (reconnectOverlay) reconnectOverlay.classList.add('hidden');
+    if (reconnectDelayTimer) { clearTimeout(reconnectDelayTimer); reconnectDelayTimer = null; }
+  }
 
-  socket.on('disconnect', () => { toast('Disconnected — retrying...'); });
+  socket.on('connect', () => {
+    hideReconnecting();
+    // On reconnect, attempt to rejoin last room for resume.
+    if (state.roomId && state.screen !== 'landing') {
+      socket.emit('joinRoom', { roomId: state.roomId, name: state.name || '', clientId });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    toast('Disconnected — retrying...');
+    // Delay overlay so quick blips don't flash.
+    if (reconnectDelayTimer) clearTimeout(reconnectDelayTimer);
+    reconnectDelayTimer = setTimeout(showReconnecting, 1500);
+  });
 
   socket.on('roomCreated', (payload) => {
     state.roomId = payload.roomId;
     state.yourSeat = payload.seat;
     state.view = payload.view || null;
+    try { localStorage.setItem('p304.room', payload.roomId); } catch (e) {}
     setScreen('lobby');
     renderLobby();
   });
@@ -168,6 +243,8 @@
     state.yourSeat = payload.seat;
     state.view = payload.view || null;
     if (state.view && state.view.roomId) state.roomId = state.view.roomId;
+    try { if (state.roomId) localStorage.setItem('p304.room', state.roomId); } catch (e) {}
+    if (payload.resumed) toast('Resumed your seat', false);
     setScreen('lobby');
     renderLobby();
   });
@@ -296,7 +373,8 @@
 
   // ---- Lobby rendering ------------------------------------------------------
   $('#leave-btn').addEventListener('click', () => {
-    window.location.reload();
+    try { localStorage.removeItem('p304.room'); } catch (e) {}
+    window.location.href = window.location.pathname; // drop ?room= etc
   });
 
   $('#start-btn').addEventListener('click', () => {
@@ -391,6 +469,10 @@
     phaseEl.textContent = phaseTxt + turnTxt;
     phaseEl.classList.toggle('your-turn', isYourTurn);
 
+    // Bid + contract strips
+    renderBidHistory(v);
+    renderContractStrip(v);
+
     // Seats
     renderOpponentSeats(v);
     renderYouSeat(v);
@@ -443,6 +525,7 @@
   // Opponents (top/left/right): face-down backs for each card in hand.
   function renderOpponentSeats(v) {
     const handCounts = v.handCounts || [0, 0, 0, 0];
+    const activeSeat = activeSeatFromView(v);
     for (let seat = 0; seat < 4; seat++) {
       if (seat === state.yourSeat) continue;
       const slot = slotOfSeat(seat);
@@ -450,8 +533,10 @@
       const el = document.getElementById('seat-' + slot);
       if (!el) continue;
 
+      const isActive = activeSeat === seat;
+      el.classList.toggle('active-player', isActive);
       el.querySelector('.seat-name').textContent = nameOfSeat(seat);
-      el.querySelector('.seat-name').classList.toggle('active', v.currentPlayer === seat);
+      el.querySelector('.seat-name').classList.toggle('active', isActive);
 
       const cardsEl = el.querySelector('.seat-cards');
       cardsEl.innerHTML = '';
@@ -463,8 +548,35 @@
 
       // Bid indicator
       const bidEl = el.querySelector('.seat-bid');
-      bidEl.textContent = bidLabelFor(v, seat);
+      bidEl.innerHTML = '';
+      const label = bidLabelFor(v, seat);
+      if (label) {
+        const text = document.createElement('span');
+        text.textContent = label;
+        bidEl.appendChild(text);
+      }
+      if (isActive) bidEl.appendChild(makeTimerEl());
     }
+  }
+
+  function activeSeatFromView(v) {
+    if (!v) return null;
+    switch (v.phase) {
+      case 'bid4': case 'bid8': return v.currentBidder;
+      case 'trump_pick1': case 'trump_pick2':
+      case 'open_choice': return v.trumpMaker;
+      case 'play': case 'inspect': return v.currentPlayer;
+      default: return null;
+    }
+  }
+
+  function makeTimerEl() {
+    const el = document.createElement('span');
+    el.className = 'turn-timer';
+    const fill = document.createElement('span');
+    fill.className = 'fill';
+    el.appendChild(fill);
+    return el;
   }
 
   function bidLabelFor(v, seat) {
@@ -480,8 +592,15 @@
 
   function renderYouSeat(v) {
     const el = $('#seat-bottom');
+    const active = activeSeatFromView(v) === state.yourSeat;
+    el.classList.toggle('active-player', active);
     el.querySelector('.seat-name').textContent = nameOfSeat(state.yourSeat) + ' (you)';
-    el.querySelector('.seat-name').classList.toggle('active', v.currentPlayer === state.yourSeat);
+    el.querySelector('.seat-name').classList.toggle('active', active);
+    const bidEl = el.querySelector('.seat-bid');
+    if (bidEl) {
+      bidEl.innerHTML = '';
+      if (active) bidEl.appendChild(makeTimerEl());
+    }
     renderHand(v.yourHand || [], legalCardIdsFromView(v));
   }
 
@@ -689,6 +808,90 @@
   function emitAction(payload) {
     socket.emit('action', payload);
   }
+
+  function renderBidHistory(v) {
+    const el = $('#bid-history');
+    if (!el) return;
+    const bids = Array.isArray(v.bids) ? v.bids : [];
+    const biddingPhase = v.phase === 'bid4' || v.phase === 'bid8' || v.phase === 'trump_pick1' || v.phase === 'trump_pick2';
+    if (!biddingPhase || bids.length === 0) {
+      el.classList.add('hidden');
+      el.innerHTML = '';
+      return;
+    }
+    el.classList.remove('hidden');
+    el.innerHTML = '';
+    const highAmt = v.highBid ? v.highBid.amount : null;
+    const highBidder = v.highBid ? v.highBid.bidder : null;
+    for (const b of bids) {
+      const chip = document.createElement('div');
+      chip.className = 'entry';
+      const who = document.createElement('span');
+      who.className = 'who';
+      who.textContent = shortNameOfSeat(b.seat);
+      chip.appendChild(who);
+      if (b.type === 'pass') {
+        chip.classList.add('pass');
+        chip.appendChild(document.createTextNode('pass'));
+      } else if (b.type === 'bid') {
+        chip.classList.add('bid');
+        chip.appendChild(document.createTextNode(displayBid(b.amount) + (b.round === 8 ? 'ā' : '')));
+        if (highAmt != null && b.seat === highBidder && b.amount === highAmt) chip.classList.add('high');
+      } else if (b.type === 'askPartner') {
+        chip.appendChild(document.createTextNode('asks partner'));
+      }
+      el.appendChild(chip);
+    }
+  }
+
+  function renderContractStrip(v) {
+    const el = $('#contract-strip');
+    if (!el) return;
+    const showPhase = v.phase === 'open_choice' || v.phase === 'play' || v.phase === 'inspect' || v.phase === 'hand_end';
+    if (!showPhase || !v.highBid) {
+      el.classList.add('hidden');
+      el.innerHTML = '';
+      return;
+    }
+    el.classList.remove('hidden');
+    el.innerHTML = '';
+    const contract = document.createElement('div');
+    contract.className = 'group';
+    contract.innerHTML = '<span class="k">contract</span>' +
+      '<span class="v">' + escapeHtml(nameOfSeat(v.highBid.bidder)) + '</span>' +
+      '<span class="v">' + displayBid(v.highBid.amount) + '</span>';
+    el.appendChild(contract);
+
+    const trumpGroup = document.createElement('div');
+    trumpGroup.className = 'group';
+    if (v.trumpSuit) {
+      const color = (v.trumpSuit === 'H' || v.trumpSuit === 'D') ? 'red' : 'black';
+      trumpGroup.innerHTML = '<span class="k">trump</span>' +
+        '<span class="v ' + color + '">' + suitSymbol(v.trumpSuit) + '</span>' +
+        (v.isOpenTrump ? '<span class="v">open</span>' : '');
+    } else {
+      trumpGroup.innerHTML = '<span class="k">trump</span><span class="closed">closed</span>';
+    }
+    el.appendChild(trumpGroup);
+
+    const scoreGroup = document.createElement('div');
+    scoreGroup.className = 'group';
+    const yourTeam = (state.yourSeat != null) ? (state.yourSeat % 2) : 0;
+    const makerTeam = (v.trumpMaker != null) ? (v.trumpMaker % 2) : 0;
+    const makerPts = v.trickPoints ? v.trickPoints[makerTeam] : 0;
+    scoreGroup.innerHTML = '<span class="k">maker pts</span>' +
+      '<span class="v">' + displayPoints(makerPts || 0) + '</span>' +
+      '<span class="k">tricks</span>' +
+      '<span class="v">' + (v.tricksPlayed || 0) + '/8</span>';
+    el.appendChild(scoreGroup);
+  }
+
+  function shortNameOfSeat(seat) {
+    const full = nameOfSeat(seat);
+    if (!full) return '';
+    return full.length > 7 ? full.slice(0, 6) + '…' : full;
+  }
+  function suitSymbol(s) { return ({ S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' })[s] || '?'; }
 
   // ---- Trick history modal ----
   const historyModal = $('#history-modal');

@@ -12,6 +12,14 @@
     <!-- Toast container for errors/info -->
     <div id="toast" class="toast hidden"></div>
 
+    <!-- Reconnecting overlay -->
+    <div id="reconnect-overlay" class="reconnect-overlay hidden" aria-live="assertive">
+      <div class="reconnect-card">
+        <div class="spinner" aria-hidden="true"></div>
+        <div class="reconnect-text">Reconnecting…</div>
+      </div>
+    </div>
+
     <!-- ========== LANDING ========== -->
     <section id="landing" class="screen">
       <div class="landing-card">
@@ -78,6 +86,8 @@
       </header>
 
       <div class="phase-banner" id="phase-banner"></div>
+      <div id="bid-history" class="bid-history hidden" aria-live="polite"></div>
+      <div id="contract-strip" class="contract-strip hidden"></div>
 
       <div class="play-area">
         <!-- Partner (top) -->
@@ -113,6 +123,7 @@
       <!-- Your hand (bottom) -->
       <div class="seat-slot seat-bottom" id="seat-bottom">
         <div class="seat-name you"></div>
+        <div class="seat-bid"></div>
         <div class="your-hand" id="your-hand"></div>
       </div>
 

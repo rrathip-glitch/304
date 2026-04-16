@@ -684,6 +684,7 @@ function viewFor(state, seat) {
     trumpRevealed: state.trumpRevealed,
     trickLeader: state.trickLeader,
     tricksWon: state.tricksWon.slice(),
+    trickPoints: state.trickPoints.slice(),
     tricksPlayed: state.tricksPlayed,
     currentTrick: state.currentTrick.map((p) => {
       if (p.faceDown && p.seat !== seat && seat !== state.trumpMaker && !state.trumpRevealed) {

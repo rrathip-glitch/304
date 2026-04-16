@@ -37,8 +37,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/health', (_req, res) => res.status(200).type('text/plain').send('ok'));
 
-// roomId -> { code, state, sockets: Map<seat, socketId|null>, aiQueue: [] }
+// roomId -> { code, state, sockets: Map<seat, socketId|null>, aiQueue: [], clientIds: Map<seat, clientId|null> }
 const rooms = new Map();
+// clientId -> { roomCode, seat }
+const clients = new Map();
 
 function genRoomCode() {
   let code = '';
@@ -71,10 +73,20 @@ function whoseTurn(state) {
 }
 
 function broadcastViews(room) {
+  // Track turn start (per phase + actor) so clients can render a timer.
+  const state = room.state;
+  const actor = whoseTurn(state);
+  const turnKey = state.phase + ':' + (actor == null ? '-' : actor);
+  if (room.lastTurnKey !== turnKey) {
+    room.lastTurnKey = turnKey;
+    room.turnStartedAt = Date.now();
+  }
   for (let seat = 0; seat < 4; seat++) {
     const sid = room.sockets.get(seat);
     if (!sid) continue;
     const view = game.viewFor(room.state, seat);
+    view.turnStartedAt = room.turnStartedAt || Date.now();
+    view.serverNow = Date.now();
     io.to(sid).emit('view', { view });
   }
 }
@@ -175,28 +187,86 @@ function emitError(socket, reason) {
   socket.emit('actionError', { reason });
 }
 
-io.on('connection', (socket) => {
-  socket.data = socket.data || { roomId: null, seat: null, name: null };
+function attachClient(room, seat, clientId) {
+  if (!clientId) return;
+  room.clientIds.set(seat, clientId);
+  clients.set(clientId, { roomCode: room.code, seat });
+}
 
-  socket.on('createRoom', ({ name } = {}) => {
+function autoReconnect(socket, clientId) {
+  const bind = clients.get(clientId);
+  if (!bind) return false;
+  const room = rooms.get(bind.roomCode);
+  if (!room) { clients.delete(clientId); return false; }
+  const seat = bind.seat;
+  const info = room.state.seats[seat];
+  if (!info || info.isAI) return false;
+  room.sockets.set(seat, socket.id);
+  socket.data.roomId = room.code;
+  socket.data.seat = seat;
+  socket.data.name = info.name;
+  socket.data.clientId = clientId;
+  socket.join(room.code);
+  socket.emit('roomJoined', { seat, view: game.viewFor(room.state, seat), resumed: true });
+  broadcastViews(room);
+  return true;
+}
+
+io.on('connection', (socket) => {
+  socket.data = socket.data || { roomId: null, seat: null, name: null, clientId: null };
+  const auth = socket.handshake && socket.handshake.auth;
+  if (auth && auth.clientId) {
+    socket.data.clientId = String(auth.clientId).slice(0, 64);
+    autoReconnect(socket, socket.data.clientId);
+  }
+
+  socket.on('createRoom', ({ name, clientId } = {}) => {
     const playerName = (name && String(name).trim()) || 'Player';
     const code = newRoomCode();
     const state = game.createGame(code);
-    const room = { code, state, sockets: new Map([[0, null], [1, null], [2, null], [3, null]]), aiQueue: [] };
+    const room = {
+      code, state,
+      sockets: new Map([[0, null], [1, null], [2, null], [3, null]]),
+      clientIds: new Map([[0, null], [1, null], [2, null], [3, null]]),
+      aiQueue: [],
+    };
     const seatRes = game.seatPlayer(state, { seat: 0, name: playerName, isAI: false });
     if (!seatRes.ok) return emitError(socket, seatRes.reason);
     rooms.set(code, room);
     room.sockets.set(0, socket.id);
+    const cid = (clientId && String(clientId).slice(0, 64)) || socket.data.clientId || null;
+    attachClient(room, 0, cid);
     socket.data.roomId = code;
     socket.data.seat = 0;
     socket.data.name = playerName;
+    socket.data.clientId = cid;
     socket.join(code);
     socket.emit('roomCreated', { roomId: code, seat: 0, view: game.viewFor(state, 0) });
   });
 
-  socket.on('joinRoom', ({ roomId, name } = {}) => {
+  socket.on('joinRoom', ({ roomId, name, clientId } = {}) => {
     const room = findRoom(roomId);
     if (!room) return emitError(socket, 'room not found');
+    const cid = (clientId && String(clientId).slice(0, 64)) || socket.data.clientId || null;
+    // If this clientId is already bound to a seat in this room, resume there.
+    if (cid) {
+      const bound = clients.get(cid);
+      if (bound && bound.roomCode === room.code) {
+        const seat = bound.seat;
+        const info = room.state.seats[seat];
+        if (info && !info.isAI) {
+          room.sockets.set(seat, socket.id);
+          socket.data.roomId = room.code;
+          socket.data.seat = seat;
+          socket.data.name = info.name;
+          socket.data.clientId = cid;
+          socket.join(room.code);
+          socket.emit('roomJoined', { seat, view: game.viewFor(room.state, seat), resumed: true });
+          broadcastViews(room);
+          return;
+        }
+      }
+    }
     const playerName = (name && String(name).trim()) || 'Player';
     const order = [2, 1, 3];
     let targetSeat = -1;
@@ -207,9 +277,11 @@ io.on('connection', (socket) => {
     const seatRes = game.seatPlayer(room.state, { seat: targetSeat, name: playerName, isAI: false });
     if (!seatRes.ok) return emitError(socket, seatRes.reason);
     room.sockets.set(targetSeat, socket.id);
+    attachClient(room, targetSeat, cid);
     socket.data.roomId = room.code;
     socket.data.seat = targetSeat;
     socket.data.name = playerName;
+    socket.data.clientId = cid;
     socket.join(room.code);
     socket.emit('roomJoined', { seat: targetSeat, view: game.viewFor(room.state, targetSeat) });
     broadcastViews(room);
@@ -322,7 +394,10 @@ io.on('connection', (socket) => {
     const room = findRoom(socket.data.roomId);
     if (!room) return;
     const seat = seatOfSocket(room, socket.id);
-    if (seat >= 0) room.sockets.set(seat, null);
+    if (seat >= 0) {
+      room.sockets.set(seat, null);
+      // Leave clientId binding intact so they can resume seamlessly.
+    }
   });
 });
 
