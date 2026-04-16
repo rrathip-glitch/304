@@ -1,7 +1,78 @@
 # Testing
 
-No automated test framework yet. Manual scenarios are the verification path.
-A future instance may add `node --test` with the Node test runner.
+Two complementary paths:
+
+1. **Headless simulator** (`scripts/simulate.js`) — exercises the real engine
+   + AI across many hands, asserting invariants. Automated. Runs in CI or
+   locally in seconds. Covers L6 QA done-bar ("every scenario has a pass/
+   fail at current HEAD").
+2. **Manual browser scenarios** — for UI, multiplayer, and mobile polish
+   that can't be exercised headlessly.
+
+---
+
+## Headless Simulator
+
+### Quick run
+
+```bash
+node scripts/simulate.js                    # 100 hands, random seed
+node scripts/simulate.js --hands=500         # longer sweep
+node scripts/simulate.js --seed=1            # deterministic
+node scripts/simulate.js --match             # full match to 22 tokens
+node scripts/simulate.js --verbose           # per-hand result line
+TRACE=1 node scripts/simulate.js --hands=3   # per-action trace
+```
+
+Exit code 0 on pass, 1 on invariant failure, 2 on uncaught exception. The
+harness will abort (not crash) on known engine edge cases (see
+`docs/TASKS.md#issues--bugs`); abort count is reported at the end.
+
+Because a known engine bug (#2) can cause `applyAction` to infinite-loop on
+certain bid sequences, always wrap long runs with a shell timeout:
+
+```bash
+timeout 60 node scripts/simulate.js --hands=200 --seed=42
+```
+
+### Invariants checked, per iteration
+
+| # | Invariant | Code reference |
+|---|-----------|----------------|
+| 1 | `viewFor(state, seat).yourHand.length` matches `state.hands[seat].length` | `checkViewsLeakFree` |
+| 2 | View for seat X never contains another seat's cards | `checkViewsLeakFree` |
+| 3 | Trump indicator is exposed only to the trump maker *or* when revealed | `checkViewsLeakFree` |
+| 4 | Face-down played cards are hidden from non-privileged seats in a closed game | `checkViewsLeakFree` |
+| 5 | No duplicate card ids across the four hands | `checkDeckIntegrity` |
+| 6 | Tokens sum to 22; neither team goes negative | `checkTokenTotal` |
+| 7 | Over a completed hand, `trickPoints[0] + trickPoints[1] === 304` | post-hand check |
+| 8 | `tricksWon[0] + tricksWon[1] === 8` per completed hand | post-hand check |
+| 9 | `ai.chooseAction(state, seat)` returns an action whose `type` is in `legalActions(state, seat)` | per-iteration |
+| 10 | `applyAction(state, seat, action)` never returns `ok: false` for an AI-chosen action | per-iteration |
+| 11 | Progress detector: aborts if (phase, bidder, currentPlayer, highBid, tricksPlayed, hand sizes) doesn't change across 20 iterations | per-iteration |
+| 12 | Safety cap: 2000 iterations per hand | per-iteration |
+
+### Phase coverage over 100 hands (seed=1, at time of first run)
+
+Before the simulator aborts on engine bug #2, it exercises:
+- `bid4` (every hand)
+- `trump_pick1` (every hand that reaches it)
+- `bid8` (every hand that reaches it)
+- `open_choice`
+- `play`
+- `inspect`
+
+The simulator should visit all non-terminal phases once the three bugs in
+`docs/TASKS.md#issues--bugs` are resolved.
+
+### Adding a new invariant
+
+1. Add a `checkXxx(state)` function near the existing checks.
+2. Call it from inside the `runHand` while-loop alongside the existing
+   `checkViewsLeakFree` etc.
+3. Re-run: `node scripts/simulate.js --hands=100 --seed=1`.
+
+---
 
 ## Manual Test Scenarios
 
