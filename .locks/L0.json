@@ -1,11 +1,11 @@
 {
   "lane": "L0",
-  "status": "FREE",
-  "session_id": "cse_01FaeKqv5f1h3akTobnq5SRZ",
-  "agent": "Claude",
-  "started_utc": "2026-04-16T19:41:16Z",
-  "heartbeat_utc": "2026-04-16T19:41:16Z",
-  "task": "(unclaimed)",
+  "status": "CLAIMED",
+  "session_id": "01FaeKqv5f1h3akTobnq5SRZ",
+  "agent": "Claude Opus 4.7",
+  "started_utc": "2026-04-16T19:43:24Z",
+  "heartbeat_utc": "2026-04-16T19:43:24Z",
+  "task": "prime orchestrator — monitor heartbeats, prune stale locks, keep board green through task completion + testing",
   "touches": [],
   "notes": ""
 }
