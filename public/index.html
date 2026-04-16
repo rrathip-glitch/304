@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#0d4a2b">
+  <title>304 — card game</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="screen-landing">
+    <!-- Toast container for errors/info -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- ========== LANDING ========== -->
+    <section id="landing" class="screen">
+      <div class="landing-card">
+        <h1 class="title">304</h1>
+        <p class="subtitle">Sri Lankan trick-taking, for four.</p>
+
+        <label class="field">
+          <span>Your name</span>
+          <input id="name-input" type="text" maxlength="20" autocomplete="off" placeholder="Nimal" />
+        </label>
+
+        <button id="create-btn" class="btn primary">Create room</button>
+
+        <div class="sep"><span>or</span></div>
+
+        <label class="field">
+          <span>Room code</span>
+          <input id="code-input" type="text" maxlength="6" autocomplete="off" placeholder="ABC123" />
+        </label>
+        <button id="join-btn" class="btn">Join room</button>
+      </div>
+    </section>
+
+    <!-- ========== LOBBY ========== -->
+    <section id="lobby" class="screen">
+      <header class="lobby-head">
+        <div class="room-label">Room</div>
+        <div id="lobby-code" class="room-code">------</div>
+        <div class="hint">Share this code with your partner.</div>
+      </header>
+
+      <div class="seats" id="lobby-seats">
+        <!-- seats 0..3 injected: North/East/South/West -->
+      </div>
+
+      <div class="lobby-actions">
+        <button id="start-btn" class="btn primary hidden">Start game</button>
+        <button id="leave-btn" class="btn ghost">Leave</button>
+      </div>
+    </section>
+
+    <!-- ========== TABLE ========== -->
+    <section id="table" class="screen">
+      <header class="table-head">
+        <div class="tokens">
+          <span class="team team-0" id="tok-0" title="Your team">
+            <span class="label">Us</span>
+            <span class="pips" id="pips-0"></span>
+          </span>
+          <span class="team team-1" id="tok-1" title="Opponents">
+            <span class="label">Them</span>
+            <span class="pips" id="pips-1"></span>
+          </span>
+        </div>
+        <div class="head-right">
+          <span id="hand-num" class="hand-num">Hand 1</span>
+          <span id="table-code" class="room-code small">------</span>
+        </div>
+      </header>
+
+      <div class="phase-banner" id="phase-banner"></div>
+
+      <div class="play-area">
+        <!-- Partner (top) -->
+        <div class="seat-slot seat-top" id="seat-top">
+          <div class="seat-name"></div>
+          <div class="seat-cards"></div>
+          <div class="seat-bid"></div>
+        </div>
+
+        <!-- L-opp (left) -->
+        <div class="seat-slot seat-left" id="seat-left">
+          <div class="seat-name"></div>
+          <div class="seat-cards vertical"></div>
+          <div class="seat-bid"></div>
+        </div>
+
+        <!-- R-opp (right) -->
+        <div class="seat-slot seat-right" id="seat-right">
+          <div class="seat-name"></div>
+          <div class="seat-cards vertical"></div>
+          <div class="seat-bid"></div>
+        </div>
+
+        <!-- Trick center -->
+        <div class="trick" id="trick">
+          <div class="trick-card slot-top"></div>
+          <div class="trick-card slot-right"></div>
+          <div class="trick-card slot-bottom"></div>
+          <div class="trick-card slot-left"></div>
+        </div>
+      </div>
+
+      <!-- Your hand (bottom) -->
+      <div class="seat-slot seat-bottom" id="seat-bottom">
+        <div class="seat-name you"></div>
+        <div class="your-hand" id="your-hand"></div>
+      </div>
+
+      <!-- Action bar -->
+      <div class="action-bar" id="action-bar">
+        <div class="action-chips" id="action-chips"></div>
+        <div class="action-extras" id="action-extras"></div>
+      </div>
+
+      <!-- Log -->
+      <details class="log-wrap" id="log-wrap">
+        <summary>Log</summary>
+        <ul class="log" id="log"></ul>
+      </details>
+    </section>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="cards.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
