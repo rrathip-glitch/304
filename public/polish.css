@@ -1,0 +1,139 @@
+/* public/polish.css — mobile polish layered on top of styles.css.
+ *
+ * Additive only: targets existing selectors and adds safe-area insets,
+ * reduced-motion overrides, deal/play animations, and token-change pulses.
+ * Kept separate so the core stylesheet stays readable.
+ */
+
+/* ---------- Safe-area insets (notched phones, home-bar iOS) ---------- */
+@supports (padding: max(0px)) {
+  #app.screen-table .table-head {
+    padding-top: max(6px, env(safe-area-inset-top));
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  #app.screen-table .action-bar {
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
+  #landing {
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  #lobby {
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+}
+
+/* Use dynamic viewport units so the table adapts when the iOS Safari URL
+ * bar hides/shows. 100dvh is the short viewport; falls back to 100vh. */
+@supports (height: 100dvh) {
+  #app.screen-table { height: 100dvh; }
+}
+
+/* ---------- Card deal animation (applied by polish.js) ---------- */
+@keyframes cardDeal {
+  0%   { transform: translate(var(--from-x, 0), var(--from-y, -140%)) rotate(-6deg); opacity: 0; }
+  60%  { opacity: 1; }
+  100% { transform: translate(0, 0) rotate(0); opacity: 1; }
+}
+.your-hand .card.just-dealt {
+  animation: cardDeal 360ms ease-out both;
+  animation-delay: var(--deal-delay, 0ms);
+}
+
+/* ---------- Card play animation enhancement ---------- */
+@keyframes cardPlayDrop {
+  0%   { transform: translateY(-20px) scale(0.92) rotate(-3deg); opacity: 0; }
+  70%  { opacity: 1; }
+  100% { transform: translateY(0) scale(1) rotate(0); opacity: 1; }
+}
+.trick .trick-card .card.just-played {
+  animation: cardPlayDrop 300ms ease-out both;
+}
+
+/* ---------- Selected card lift on hover/active for your hand ---------- */
+.your-hand .card.legal:hover,
+.your-hand .card.legal:focus-visible {
+  transform: translateY(-8px);
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+.your-hand .card.selected { transform: translateY(-16px); }
+
+/* ---------- Token pulse on change ---------- */
+@keyframes tokenPulseGain {
+  0%   { transform: scale(1);   filter: brightness(1); }
+  40%  { transform: scale(1.25); filter: brightness(1.5) drop-shadow(0 0 6px var(--gold)); }
+  100% { transform: scale(1);   filter: brightness(1); }
+}
+@keyframes tokenPulseLoss {
+  0%   { transform: scale(1);   opacity: 1; }
+  40%  { transform: scale(1.15); opacity: 0.6; }
+  100% { transform: scale(1);   opacity: 1; }
+}
+.pips .pip.pip-gain  { animation: tokenPulseGain 600ms ease-out both; }
+.pips .pip.pip-loss  { animation: tokenPulseLoss 500ms ease-in-out both; }
+
+/* ---------- Trick-won banner flourish ---------- */
+@keyframes trickWonFade {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.95); }
+  20%  { opacity: 1; transform: translateY(0) scale(1); }
+  80%  { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-8px) scale(1); }
+}
+.trick-won-banner {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.75);
+  color: var(--gold);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+  z-index: 5;
+  animation: trickWonFade 1800ms ease-in-out both;
+  white-space: nowrap;
+}
+
+/* ---------- Your-turn pulse on phase banner ---------- */
+@keyframes yourTurnPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(230, 200, 106, 0.35); }
+  50%      { box-shadow: 0 0 0 6px rgba(230, 200, 106, 0); }
+}
+.phase-banner.your-turn {
+  animation: yourTurnPulse 2.2s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+/* ---------- Reduced motion respect ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------- Landscape orientation squeeze ---------- */
+@media (orientation: landscape) and (max-height: 500px) {
+  .seat-bottom { padding: 2px 8px; }
+  .your-hand { min-height: 80px; padding: 6px 8px; }
+  .your-hand .card { transform: scale(0.88); transform-origin: bottom center; }
+  .phase-banner { min-height: 18px; font-size: 11px; padding: 2px 10px; }
+  .table-head { min-height: 32px; padding-top: 4px; padding-bottom: 4px; }
+}
+
+/* ---------- High-contrast tap feedback (no idle outlines) ---------- */
+button:focus { outline: none; }
+button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
