@@ -20,14 +20,30 @@
 
 **Start here if you are a fresh instance:**
 
-1. `npm install` then `node server.js`. Smoke test: open two tabs in the same
-   browser, create room from one, join from the other, fill remaining seats
-   with AI, play a hand end-to-end. Watch for view-leak bugs (face-down card
-   leaking rank/suit, trump indicator visible to non-makers).
-2. Build out `docs/TESTING.md` scenarios once verified.
-3. Polish: sound effects, card deal animation, mobile safe-area insets.
+1. Fix the three engine bugs under "Issues / bugs" below — all were
+   surfaced by `scripts/simulate.js` and block 100-hand sweeps from
+   passing cleanly. #2 (bid4 infinite loop) is the most urgent because
+   it hangs the real server too.
+2. `npm install` then `node server.js`. Smoke test: open two tabs in the
+   same browser, create room from one, join from the other, fill
+   remaining seats with AI, play a hand end-to-end. Watch for view-leak
+   bugs (face-down card leaking rank/suit, trump indicator visible to
+   non-makers).
+3. After bug fixes, re-run the simulator:
+   `timeout 60 node scripts/simulate.js --hands=200 --seed=1`. Target:
+   zero aborts, zero invariant failures.
 4. PCC (Partner Close Caps) 3-player mechanics — currently deferred; see
    `docs/RULES.md#partner-close-caps-pcc`.
+
+## Recently shipped (sub-agent branch `claude/sub-agent-soul-goals-5CCGd`)
+
+- `scripts/simulate.js` — L6 QA harness; see `docs/TESTING.md#headless-simulator`.
+- `docs/TESTING.md` — documents 12 invariants + phase coverage table.
+- `public/polish.css` + `public/polish.js` — safe-area insets, 100dvh,
+  card-deal/play animations, token-pip pulse, trick-won banner, WebAudio
+  SFX module (tap to enable on first gesture; `?sfx=0` to disable).
+  Additive only — removing these three files restores the unpolished
+  client.
 
 ## Backlog (not blocking v1 playable)
 

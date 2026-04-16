@@ -186,6 +186,56 @@ respects user autonomy on rare amounts.
 
 ---
 
+## 2026-04-16 — Mobile polish layered as additive css+js, not edits to client.js
+
+**Decision:** `public/polish.css` and `public/polish.js` are loaded after
+the main client. They attach purely through MutationObserver on existing
+DOM and never call into `client.js` or the socket. Removing the two files
+leaves the client fully functional (minus polish).
+
+**Alternatives:** Edit `client.js` to call a new animation/SFX API at
+known points (card played, token changed, trick won).
+
+**Rationale:** Keeps the L4 client lane's surface small for the next
+contributor. Animation/SFX logic is independently testable and can be
+swapped out or disabled with `?sfx=0` without touching core code. Cost:
+one MutationObserver cycle per DOM update — negligible on mobile.
+
+---
+
+## 2026-04-16 — WebAudio tones instead of audio files
+
+**Decision:** SFX is generated in-browser via oscillator nodes (sine /
+triangle / sawtooth) for card-play, trick-won, your-turn, error, and
+game-over cues. No `.mp3`/`.ogg`/`.wav` assets ship.
+
+**Alternatives:** Bundle short audio files (or data-URIs) for higher
+fidelity.
+
+**Rationale:** Zero network cost, zero copyright worries, matches the
+"no dependencies, no bundler" constraint from SOUL §3. The beep-like
+tones are sufficient for the game's feedback-loop purpose (confirming a
+tap registered, flagging your turn, celebrating a taken trick).
+
+---
+
+## 2026-04-16 — Ship a headless engine+AI simulator as L6 QA
+
+**Decision:** `scripts/simulate.js` drives the actual `src/engine/game.js`
+and `src/engine/ai.js` across many hands, asserting view-leak, deck,
+token, and legal-action invariants. Deterministic via `--seed=N`. Runs in
+seconds; usable in CI.
+
+**Alternatives:** Handwritten `node --test` unit tests per module.
+
+**Rationale:** Unit tests assert the author's model; the simulator
+stress-tests the actual integration surface and is far more likely to
+catch cross-module edge cases (the three bugs filed on first run are
+direct evidence). Unit tests can still be added later for regression
+pinning of specific fixes.
+
+---
+
 ## 2026-04-16 — Resume via `sessionStorage.roomId` + URL `?room=`
 
 **Decision:** On socket connect, the client auto-emits `resume { roomId,
