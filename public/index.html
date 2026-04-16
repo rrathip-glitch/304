@@ -1,167 +1,132 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
-  <meta name="theme-color" content="#0c4a3a" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>304</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#0d4a2b">
+  <title>304 — card game</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- ================= LANDING ================= -->
-  <section id="view-landing" class="view" aria-label="Landing">
-    <header class="brand">
-      <h1>304</h1>
-      <p class="tagline">the Sri Lankan card game &mdash; for you and dad</p>
-    </header>
+  <div id="app" class="screen-landing">
+    <!-- Toast container for errors/info -->
+    <div id="toast" class="toast hidden"></div>
 
-    <form id="form-create" class="card-panel">
-      <label for="create-name">Your name</label>
-      <input id="create-name" name="name" type="text" autocomplete="given-name"
-             maxlength="16" placeholder="e.g. Ravi" required />
-      <button type="submit" class="btn-primary">Create room</button>
-    </form>
+    <!-- ========== LANDING ========== -->
+    <section id="landing" class="screen">
+      <div class="landing-card">
+        <h1 class="title">304</h1>
+        <p class="subtitle">Sri Lankan trick-taking, for four.</p>
 
-    <div class="divider"><span>or</span></div>
+        <label class="field">
+          <span>Your name</span>
+          <input id="name-input" type="text" maxlength="20" autocomplete="off" placeholder="Nimal" />
+        </label>
 
-    <form id="form-join" class="card-panel">
-      <label for="join-code">Room code</label>
-      <input id="join-code" name="room" type="text" inputmode="latin" autocapitalize="characters"
-             maxlength="6" placeholder="ABC123" required />
-      <label for="join-name">Your name</label>
-      <input id="join-name" name="name" type="text" autocomplete="given-name"
-             maxlength="16" placeholder="e.g. Dad" required />
-      <button type="submit" class="btn-secondary">Join room</button>
-    </form>
+        <button id="create-btn" class="btn primary">Create room</button>
 
-    <p class="fineprint">
-      Novice-friendly. AI fills any empty seats.
-      <a href="#" id="show-rules">How to play</a>
-    </p>
-  </section>
+        <div class="sep"><span>or</span></div>
 
-  <!-- ================= LOBBY ================= -->
-  <section id="view-lobby" class="view hidden" aria-label="Lobby">
-    <header class="header">
-      <div class="header-left">
-        <span class="label">Room</span>
-        <code id="lobby-code" class="room-code">------</code>
+        <label class="field">
+          <span>Room code</span>
+          <input id="code-input" type="text" maxlength="6" autocomplete="off" placeholder="ABC123" />
+        </label>
+        <button id="join-btn" class="btn">Join room</button>
       </div>
-      <div class="header-right">
-        <button id="btn-copy-link" class="btn-chip" type="button">Copy link</button>
-      </div>
-    </header>
+    </section>
 
-    <div class="lobby-body">
-      <h2>Seats</h2>
-      <ul id="lobby-seats" class="seat-list" role="list"></ul>
+    <!-- ========== LOBBY ========== -->
+    <section id="lobby" class="screen">
+      <header class="lobby-head">
+        <div class="room-label">Room</div>
+        <div id="lobby-code" class="room-code">------</div>
+        <div class="hint">Share this code with your partner.</div>
+      </header>
+
+      <div class="seats" id="lobby-seats">
+        <!-- seats 0..3 injected: North/East/South/West -->
+      </div>
 
       <div class="lobby-actions">
-        <button id="btn-start" class="btn-primary" type="button" disabled>Start game</button>
-        <p id="lobby-hint" class="hint">Share the link. Empty seats become AI.</p>
+        <button id="start-btn" class="btn primary hidden">Start game</button>
+        <button id="leave-btn" class="btn ghost">Leave</button>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- ================= TABLE ================= -->
-  <section id="view-table" class="view hidden" aria-label="Game table">
-    <header class="header">
-      <div class="header-left">
-        <span class="score" id="score-us" aria-label="Your team tokens">11</span>
-        <span class="score-sep">&middot;</span>
-        <span class="score" id="score-them" aria-label="Opponent tokens">11</span>
-      </div>
-      <div class="header-center">
-        <span id="phase-label" class="phase">&mdash;</span>
-      </div>
-      <div class="header-right">
-        <button id="btn-menu" class="btn-chip" type="button" aria-label="Menu">&#9776;</button>
-      </div>
-    </header>
-
-    <main class="table" role="main">
-      <!-- Opponents and partner -->
-      <div class="seat seat-top" data-seat-slot="partner">
-        <div class="seat-info">
-          <span class="seat-name">&mdash;</span>
-          <span class="seat-badge hidden"></span>
+    <!-- ========== TABLE ========== -->
+    <section id="table" class="screen">
+      <header class="table-head">
+        <div class="tokens">
+          <span class="team team-0" id="tok-0" title="Your team">
+            <span class="label">Us</span>
+            <span class="pips" id="pips-0"></span>
+          </span>
+          <span class="team team-1" id="tok-1" title="Opponents">
+            <span class="label">Them</span>
+            <span class="pips" id="pips-1"></span>
+          </span>
         </div>
-        <div class="opp-hand" aria-label="Partner hand"></div>
-      </div>
-
-      <div class="seat seat-left" data-seat-slot="left">
-        <div class="opp-hand vertical" aria-label="Left opponent hand"></div>
-        <div class="seat-info">
-          <span class="seat-name">&mdash;</span>
-          <span class="seat-badge hidden"></span>
+        <div class="head-right">
+          <span id="hand-num" class="hand-num">Hand 1</span>
+          <span id="table-code" class="room-code small">------</span>
         </div>
-      </div>
+      </header>
 
-      <div class="seat seat-right" data-seat-slot="right">
-        <div class="opp-hand vertical" aria-label="Right opponent hand"></div>
-        <div class="seat-info">
-          <span class="seat-name">&mdash;</span>
-          <span class="seat-badge hidden"></span>
+      <div class="phase-banner" id="phase-banner"></div>
+
+      <div class="play-area">
+        <!-- Partner (top) -->
+        <div class="seat-slot seat-top" id="seat-top">
+          <div class="seat-name"></div>
+          <div class="seat-cards"></div>
+          <div class="seat-bid"></div>
         </div>
-      </div>
 
-      <!-- Center: trick area -->
-      <div class="trick-area" aria-label="Current trick">
-        <div class="trick-card trick-top" data-trick-slot="partner"></div>
-        <div class="trick-card trick-left" data-trick-slot="left"></div>
-        <div class="trick-card trick-right" data-trick-slot="right"></div>
-        <div class="trick-card trick-bottom" data-trick-slot="me"></div>
-        <div class="trick-center">
-          <div class="trump-badge hidden" id="trump-badge"><span class="tb-label">Trump</span><span class="tb-suit">&mdash;</span></div>
-          <div class="bid-badge hidden" id="bid-badge"><span>Bid</span><strong id="bid-amount">&mdash;</strong></div>
-          <div class="trick-tally" id="trick-tally" aria-label="Tricks won">
-            <span class="tt-us">0</span><span class="tt-sep">&ndash;</span><span class="tt-them">0</span>
-          </div>
+        <!-- L-opp (left) -->
+        <div class="seat-slot seat-left" id="seat-left">
+          <div class="seat-name"></div>
+          <div class="seat-cards vertical"></div>
+          <div class="seat-bid"></div>
+        </div>
+
+        <!-- R-opp (right) -->
+        <div class="seat-slot seat-right" id="seat-right">
+          <div class="seat-name"></div>
+          <div class="seat-cards vertical"></div>
+          <div class="seat-bid"></div>
+        </div>
+
+        <!-- Trick center -->
+        <div class="trick" id="trick">
+          <div class="trick-card slot-top"></div>
+          <div class="trick-card slot-right"></div>
+          <div class="trick-card slot-bottom"></div>
+          <div class="trick-card slot-left"></div>
         </div>
       </div>
 
-      <!-- Your seat -->
-      <div class="seat seat-bottom" data-seat-slot="me">
-        <div class="seat-info">
-          <span class="seat-name">You</span>
-          <span class="seat-badge hidden"></span>
-        </div>
-        <div id="my-hand" class="my-hand" aria-label="Your hand"></div>
+      <!-- Your hand (bottom) -->
+      <div class="seat-slot seat-bottom" id="seat-bottom">
+        <div class="seat-name you"></div>
+        <div class="your-hand" id="your-hand"></div>
       </div>
-    </main>
 
-    <!-- Action bar (bids, open/closed, continue, etc.) -->
-    <footer class="actionbar" id="actionbar" aria-label="Actions">
-      <div id="action-prompt" class="action-prompt">&mdash;</div>
-      <div id="action-controls" class="action-controls"></div>
-    </footer>
+      <!-- Action bar -->
+      <div class="action-bar" id="action-bar">
+        <div class="action-chips" id="action-chips"></div>
+        <div class="action-extras" id="action-extras"></div>
+      </div>
 
-    <!-- Log drawer -->
-    <aside id="log-drawer" class="log-drawer hidden" aria-label="Game log">
-      <button class="close" id="log-close" type="button">Close</button>
-      <ol id="log-list"></ol>
-    </aside>
-  </section>
-
-  <!-- ================= TOASTS / MODAL ================= -->
-  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-
-  <dialog id="modal" class="modal" aria-modal="true">
-    <form method="dialog" class="modal-body">
-      <h3 id="modal-title">&mdash;</h3>
-      <div id="modal-content"></div>
-      <menu class="modal-actions">
-        <button id="modal-cancel" value="cancel" class="btn-secondary">Cancel</button>
-        <button id="modal-ok" value="ok" class="btn-primary" autofocus>OK</button>
-      </menu>
-    </form>
-  </dialog>
+      <!-- Log -->
+      <details class="log-wrap" id="log-wrap">
+        <summary>Log</summary>
+        <ul class="log" id="log"></ul>
+      </details>
+    </section>
+  </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/cards.js"></script>
-  <script src="/client.js"></script>
+  <script src="cards.js"></script>
+  <script src="client.js"></script>
 </body>
 </html>

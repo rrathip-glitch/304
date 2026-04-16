@@ -1,559 +1,538 @@
-/* 304 — Socket.IO client, UI state, renderers.
- *
- * Binds to the protocol in docs/API.md. Never computes game state locally —
- * the server sends a filtered `view` and this file renders it.
- *
- *   C → S: createRoom, joinRoom, setSeat, addAI, removeAI, startGame,
- *          action { type, ...payload }, resume
- *   S → C: roomCreated, roomJoined, view, actionError, playerUpdate
- */
+// public/client.js — Socket.IO client for 304.
+// Talks to server via the protocol in docs/API.md. No framework.
+
 (function () {
-  "use strict";
+  'use strict';
 
-  // ================= DOM refs =================
-  const $ = (sel) => document.querySelector(sel);
-  const views = {
-    landing: $("#view-landing"),
-    lobby: $("#view-lobby"),
-    table: $("#view-table"),
-  };
-  const toastEl = $("#toast");
-  const modal = $("#modal");
+  const socket = io();
 
-  // ================= State =================
+  // ---- UI state -------------------------------------------------------------
   const state = {
-    name: localStorage.getItem("p304.name") || "",
+    screen: 'landing',     // 'landing' | 'lobby' | 'table'
+    name: '',
     roomId: null,
     yourSeat: null,
-    isHost: false,
-    lastView: null,
-    selectedCardId: null,
+    view: null,            // last PlayerView from server
   };
 
-  // ================= View switching =================
-  function showView(name) {
-    for (const k in views) views[k].classList.toggle("hidden", k !== name);
-  }
+  const SEAT_LABELS = ['North', 'East', 'South', 'West']; // fallback labels
+  const PHASE_LABELS = {
+    waiting: 'Waiting',
+    bid4: '4-card bidding',
+    trump_pick1: 'Pick trump indicator',
+    bid8: '8-card bidding',
+    trump_pick2: 'Pick trump indicator',
+    open_choice: 'Open or closed?',
+    play: 'Playing tricks',
+    inspect: 'Inspecting trick',
+    hand_end: 'Hand complete',
+    game_over: 'Game over',
+  };
 
-  // ================= Toast =================
+  // ---- DOM lookups ----------------------------------------------------------
+  const $ = (sel) => document.querySelector(sel);
+  const app = $('#app');
+  const screens = {
+    landing: $('#landing'),
+    lobby: $('#lobby'),
+    table: $('#table'),
+  };
+  const toastEl = $('#toast');
   let toastTimer = null;
-  function toast(msg, ms = 2200) {
+
+  function setScreen(name) {
+    state.screen = name;
+    for (const [k, el] of Object.entries(screens)) {
+      el.classList.toggle('active', k === name);
+    }
+    app.className = 'screen-' + name;
+  }
+  setScreen('landing');
+
+  function toast(msg, isError) {
     toastEl.textContent = msg;
-    toastEl.classList.remove("hidden");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toastEl.classList.add("hidden"), ms);
+    toastEl.classList.remove('hidden');
+    toastEl.style.background = isError === false ? '#2f7d4b' : 'var(--danger)';
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.add('hidden'), 2600);
   }
 
-  // ================= Socket =================
-  const socket = io({ transports: ["websocket", "polling"] });
+  // ---- Landing handlers -----------------------------------------------------
+  const nameInput = $('#name-input');
+  const codeInput = $('#code-input');
+  // Pre-populate name if previously used
+  try {
+    const saved = localStorage.getItem('p304.name');
+    if (saved) nameInput.value = saved;
+  } catch (e) { /* ignore */ }
 
-  socket.on("connect", () => {
-    // Auto-resume if we have a room in URL or storage.
-    const urlRoom = new URLSearchParams(location.search).get("room");
-    const savedRoom = sessionStorage.getItem("p304.roomId");
-    const resumeRoom = savedRoom || urlRoom;
-    if (resumeRoom && state.name) {
-      socket.emit("resume", { roomId: resumeRoom, name: state.name });
-    } else if (urlRoom) {
-      $("#join-code").value = urlRoom.toUpperCase();
-    }
-    prefillName();
-  });
-
-  socket.on("disconnect", () => toast("Disconnected — reconnecting…", 3000));
-
-  socket.on("roomCreated", ({ roomId, seat, view }) => {
-    state.roomId = roomId;
-    state.yourSeat = seat;
-    state.isHost = seat === 0;
-    sessionStorage.setItem("p304.roomId", roomId);
-    updateShareURL(roomId);
-    applyView(view);
-  });
-
-  socket.on("roomJoined", ({ seat, view, roomId }) => {
-    state.yourSeat = seat;
-    if (roomId) state.roomId = roomId;
-    state.isHost = seat === 0;
-    sessionStorage.setItem("p304.roomId", state.roomId);
-    updateShareURL(state.roomId);
-    applyView(view);
-  });
-
-  socket.on("view", ({ view }) => applyView(view));
-  socket.on("playerUpdate", ({ view }) => view && applyView(view));
-
-  socket.on("actionError", ({ reason }) => toast(reason || "Illegal action"));
-
-  // ================= Landing =================
-  function prefillName() {
-    if (!state.name) return;
-    const el1 = $("#create-name"), el2 = $("#join-name");
-    if (el1 && !el1.value) el1.value = state.name;
-    if (el2 && !el2.value) el2.value = state.name;
-  }
-
-  $("#form-create").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const name = $("#create-name").value.trim();
-    if (!name) return;
+  $('#create-btn').addEventListener('click', () => {
+    const name = nameInput.value.trim();
+    if (!name) { toast('Enter your name first'); return; }
     state.name = name;
-    localStorage.setItem("p304.name", name);
-    socket.emit("createRoom", { name });
+    try { localStorage.setItem('p304.name', name); } catch (e) {}
+    socket.emit('createRoom', { name });
   });
 
-  $("#form-join").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const roomId = $("#join-code").value.trim().toUpperCase();
-    const name = $("#join-name").value.trim();
-    if (!roomId || !name) return;
+  $('#join-btn').addEventListener('click', () => {
+    const name = nameInput.value.trim();
+    const roomId = codeInput.value.toUpperCase().trim();
+    if (!name) { toast('Enter your name first'); return; }
+    if (!roomId) { toast('Enter a room code'); return; }
     state.name = name;
-    state.roomId = roomId;
-    localStorage.setItem("p304.name", name);
-    socket.emit("joinRoom", { roomId, name });
+    try { localStorage.setItem('p304.name', name); } catch (e) {}
+    socket.emit('joinRoom', { roomId, name });
   });
 
-  $("#show-rules").addEventListener("click", (e) => {
-    e.preventDefault();
-    openModal("How to play (short)",
-      "304 is a trick-taking game for 4 in 2 teams. Bid (min 160). " +
-      "Highest bidder picks trump by placing a face-down card. " +
-      "Play 8 tricks, must follow suit. First team to 22 tokens wins.");
+  // ---- Socket listeners -----------------------------------------------------
+  socket.on('connect', () => { /* connected */ });
+
+  socket.on('disconnect', () => { toast('Disconnected — retrying...'); });
+
+  socket.on('roomCreated', (payload) => {
+    state.roomId = payload.roomId;
+    state.yourSeat = payload.seat;
+    state.view = payload.view || null;
+    setScreen('lobby');
+    renderLobby();
   });
 
-  // ================= Lobby =================
-  $("#btn-copy-link").addEventListener("click", async () => {
-    const url = shareURL();
-    try {
-      await navigator.clipboard.writeText(url);
-      toast("Link copied");
-    } catch {
-      prompt("Copy this link:", url);
+  socket.on('roomJoined', (payload) => {
+    state.yourSeat = payload.seat;
+    state.view = payload.view || null;
+    if (state.view && state.view.roomId) state.roomId = state.view.roomId;
+    setScreen('lobby');
+    renderLobby();
+  });
+
+  socket.on('view', (payload) => {
+    const view = payload && payload.view ? payload.view : payload;
+    state.view = view;
+    if (view && typeof view.yourSeat === 'number') state.yourSeat = view.yourSeat;
+    if (view && view.roomId) state.roomId = view.roomId;
+    if (view && view.phase === 'waiting') {
+      setScreen('lobby');
+      renderLobby();
+    } else {
+      setScreen('table');
+      renderTable();
     }
   });
 
-  $("#btn-start").addEventListener("click", () => {
-    socket.emit("startGame");
+  socket.on('actionError', (p) => {
+    const reason = (p && p.reason) || 'Illegal action';
+    toast(reason);
   });
 
-  function renderLobby(view) {
-    $("#lobby-code").textContent = state.roomId || "------";
-    const list = $("#lobby-seats");
-    list.innerHTML = "";
-    const seats = view.seats || [];
-    const labels = ["You (host)", "Right opponent", "Partner", "Left opponent"];
+  // ---- Lobby rendering ------------------------------------------------------
+  $('#leave-btn').addEventListener('click', () => {
+    window.location.reload();
+  });
+
+  $('#start-btn').addEventListener('click', () => {
+    socket.emit('startGame');
+  });
+
+  function renderLobby() {
+    const code = state.roomId || '------';
+    $('#lobby-code').textContent = code;
+
+    const v = state.view || {};
+    const seats = v.seats || [null, null, null, null];
+    const youSeat = state.yourSeat;
+    const youAreHost = youSeat === 0;
+
+    const list = $('#lobby-seats');
+    list.innerHTML = '';
     for (let i = 0; i < 4; i++) {
-      const s = seats[i] || { empty: true };
-      const li = document.createElement("li");
-      li.className = "seat-row";
-      if (s.empty) li.classList.add("empty");
-      if (s.isAI) li.classList.add("ai");
-      if (i === 0) li.classList.add("host");
-      const idx = document.createElement("span");
-      idx.className = "seat-idx";
-      idx.textContent = String(i);
-      const name = document.createElement("div");
-      name.innerHTML = `<span class="seat-name">${escapeHTML(
-        s.empty ? "(empty)" : s.name || "Player"
-      )}</span><div class="role-tag">${labels[i]}</div>`;
-      const action = document.createElement("div");
-      if (state.isHost && s.empty && !s.isAI) {
-        const b = document.createElement("button");
-        b.className = "btn-chip";
-        b.type = "button";
-        b.textContent = "Add AI";
-        b.onclick = () => socket.emit("addAI", { seat: i });
-        action.appendChild(b);
-      } else if (state.isHost && s.isAI) {
-        const b = document.createElement("button");
-        b.className = "btn-chip";
-        b.type = "button";
-        b.textContent = "Remove";
-        b.onclick = () => socket.emit("removeAI", { seat: i });
-        action.appendChild(b);
-      }
-      li.appendChild(idx);
-      li.appendChild(name);
-      li.appendChild(action);
-      list.appendChild(li);
-    }
-    const startBtn = $("#btn-start");
-    startBtn.disabled = !state.isHost;
-    $("#lobby-hint").textContent = state.isHost
-      ? "Empty seats become AI when you start."
-      : "Waiting for the host to start…";
-  }
+      const row = document.createElement('div');
+      row.className = 'seat-row';
 
-  // ================= Table =================
-  function renderTable(view) {
-    // Header
-    const team = state.yourSeat % 2; // seats {0,2}=team 0, {1,3}=team 1
-    const us = view.tokens?.[team] ?? 11;
-    const them = view.tokens?.[team ^ 1] ?? 11;
-    $("#score-us").textContent = us;
-    $("#score-them").textContent = them;
-    $("#phase-label").textContent = phaseLabel(view.phase);
+      const label = document.createElement('div');
+      label.className = 'seat-label';
+      label.textContent = SEAT_LABELS[i] + (i === 0 ? ' (host)' : '');
+      row.appendChild(label);
 
-    // Trump badge
-    const tb = $("#trump-badge");
-    if (view.trumpSuit) {
-      tb.classList.remove("hidden");
-      const sym = (Cards.SUIT_SYMBOL[view.trumpSuit] || "?");
-      tb.querySelector(".tb-suit").textContent = sym;
-      tb.classList.toggle("red", Cards.SUIT_COLOR[view.trumpSuit] === "red");
-    } else {
-      tb.classList.add("hidden");
-    }
-
-    // Bid badge
-    const bb = $("#bid-badge");
-    if (view.highBid) {
-      bb.classList.remove("hidden");
-      const amt = view.highBid.isCloseCaps ? "PCC" : Cards.displayPoints(view.highBid.amount * 10);
-      $("#bid-amount").textContent = amt;
-    } else {
-      bb.classList.add("hidden");
-    }
-
-    // Trick tally
-    const tally = $("#trick-tally");
-    tally.querySelector(".tt-us").textContent = view.tricksWon?.[team] ?? 0;
-    tally.querySelector(".tt-them").textContent = view.tricksWon?.[team ^ 1] ?? 0;
-
-    renderSeats(view);
-    renderTrick(view);
-    renderMyHand(view);
-    renderActionBar(view);
-  }
-
-  function phaseLabel(p) {
-    return ({
-      waiting: "Waiting",
-      bid4: "Bidding (1st round)",
-      trump_pick1: "Pick trump",
-      bid8: "Bidding (2nd round)",
-      trump_pick2: "Pick trump",
-      open_choice: "Open or closed?",
-      play: "Play",
-      inspect: "Inspecting",
-      hand_end: "Hand over",
-      game_over: "Game over",
-    }[p] || p || "");
-  }
-
-  function renderSeats(view) {
-    // Map absolute seats to slot positions relative to you.
-    // You: me. Counter-clockwise: next = (p+3)%4. From your seat,
-    //   right opp = (you+3)%4, partner = (you+2)%4, left opp = (you+1)%4.
-    const you = state.yourSeat;
-    const slot = {
-      me: you,
-      right: (you + 3) % 4,
-      partner: (you + 2) % 4,
-      left: (you + 1) % 4,
-    };
-    const seatEls = document.querySelectorAll(".seat[data-seat-slot]");
-    seatEls.forEach((el) => {
-      const which = el.dataset.seatSlot;
-      const seatIdx = slot[which];
-      const info = view.seats?.[seatIdx] || {};
-      const nameEl = el.querySelector(".seat-name");
-      if (nameEl) nameEl.textContent = which === "me" ? "You" : (info.name || "—");
-
-      const badge = el.querySelector(".seat-badge");
-      if (badge) {
-        const labels = [];
-        let cls = "seat-badge";
-        if (view.currentPlayer === seatIdx) { labels.push("turn"); cls += " turn"; }
-        if (view.trumpMaker === seatIdx) { labels.push("maker"); cls += " maker"; }
-        if (view.dealer === seatIdx) { labels.push("dealer"); cls += " dealer"; }
-        if (labels.length) {
-          badge.className = cls;
-          badge.textContent = labels[0];
-          badge.classList.remove("hidden");
-        } else {
-          badge.classList.add("hidden");
-        }
-      }
-
-      // Opponent hand back-rendering
-      const oppHand = el.querySelector(".opp-hand");
-      if (oppHand && which !== "me") {
-        oppHand.innerHTML = "";
-        const n = view.handCounts?.[seatIdx] ?? 0;
-        for (let i = 0; i < n; i++) oppHand.appendChild(Cards.back({ mini: true }));
-      }
-    });
-  }
-
-  function renderTrick(view) {
-    const slots = {
-      me: state.yourSeat,
-      right: (state.yourSeat + 3) % 4,
-      partner: (state.yourSeat + 2) % 4,
-      left: (state.yourSeat + 1) % 4,
-    };
-    const slotEls = document.querySelectorAll(".trick-card");
-    slotEls.forEach((el) => (el.innerHTML = ""));
-    const played = view.currentTrick || [];
-    for (const p of played) {
-      let which;
-      for (const k in slots) if (slots[k] === p.seat) which = k;
-      if (!which) continue;
-      const el = document.querySelector(`.trick-card[data-trick-slot="${which}"]`);
-      if (!el) continue;
-      let cardEl;
-      if (p.hidden || (p.faceDown && !p.revealed)) {
-        cardEl = Cards.facedown({ indicator: p.isTrumpIndicator });
+      const occ = document.createElement('div');
+      occ.className = 'seat-occupant';
+      const s = seats[i];
+      if (s && s.name) {
+        occ.textContent = s.name + (s.isAI ? ' (AI)' : '') + (i === youSeat ? '  — you' : '');
       } else {
-        cardEl = Cards.element(p.card, { indicator: p.isTrumpIndicator });
+        occ.classList.add('empty');
+        occ.textContent = 'empty';
       }
-      el.appendChild(cardEl);
+      row.appendChild(occ);
+
+      if (youAreHost && i !== 0) {
+        const btn = document.createElement('button');
+        btn.className = 'btn seat-ai-toggle';
+        if (s && s.isAI) {
+          btn.textContent = 'Remove AI';
+          btn.addEventListener('click', () => socket.emit('removeAI', { seat: i }));
+        } else if (!s) {
+          btn.textContent = 'Add AI';
+          btn.addEventListener('click', () => socket.emit('addAI', { seat: i }));
+        } else {
+          btn.textContent = '';
+          btn.style.visibility = 'hidden';
+        }
+        row.appendChild(btn);
+      }
+
+      list.appendChild(row);
+    }
+
+    const startBtn = $('#start-btn');
+    startBtn.classList.toggle('hidden', !youAreHost);
+  }
+
+  // ---- Table rendering ------------------------------------------------------
+
+  // Visual slot mapping: your seat → 'bottom'. next(p)=(p+3)%4 (counter-clockwise).
+  // So if yourSeat=s, then:
+  //   s        -> bottom
+  //   (s+3)%4  -> right   (your right-hand opp, next in turn order)
+  //   (s+2)%4  -> top     (partner)
+  //   (s+1)%4  -> left    (your left-hand opp)
+  function slotOfSeat(seat) {
+    if (state.yourSeat == null) return null;
+    const diff = (seat - state.yourSeat + 4) % 4;
+    return ['bottom', 'left', 'top', 'right'][diff];
+  }
+
+  function renderTable() {
+    const v = state.view;
+    if (!v) return;
+
+    // Header
+    $('#table-code').textContent = state.roomId || '';
+    $('#hand-num').textContent = 'Hand ' + (v.handNumber || 1);
+    renderTokens(v.tokens || [11, 11]);
+
+    // Phase banner — shows the phase plus whose turn
+    const phase = v.phase || '';
+    const isYourTurn = v.currentPlayer === state.yourSeat;
+    const phaseEl = $('#phase-banner');
+    const phaseTxt = PHASE_LABELS[phase] || phase;
+    const turnTxt = v.currentPlayer != null
+      ? (isYourTurn ? ' — your turn' : ' — ' + nameOfSeat(v.currentPlayer) + '\'s turn')
+      : '';
+    phaseEl.textContent = phaseTxt + turnTxt;
+    phaseEl.classList.toggle('your-turn', isYourTurn);
+
+    // Seats
+    renderOpponentSeats(v);
+    renderYouSeat(v);
+
+    // Trick center
+    renderTrick(v.currentTrick || []);
+
+    // Action bar
+    renderActionBar(v);
+
+    // Log
+    renderLog(v.log || []);
+  }
+
+  function nameOfSeat(seat) {
+    const v = state.view;
+    if (!v || !v.seats) return SEAT_LABELS[seat];
+    const s = v.seats[seat];
+    if (s && s.name) return s.name;
+    return SEAT_LABELS[seat];
+  }
+
+  function renderTokens(tokens) {
+    // Our team index: seats 0 and 2 are team 0; seats 1 and 3 are team 1.
+    const yourTeam = (state.yourSeat != null) ? (state.yourSeat % 2) : 0;
+    const usCount = tokens[yourTeam] || 0;
+    const themCount = tokens[1 - yourTeam] || 0;
+    renderPips($('#pips-0'), usCount);
+    renderPips($('#pips-1'), themCount);
+  }
+
+  function renderPips(container, n) {
+    container.innerHTML = '';
+    const max = 22;
+    const shown = Math.max(0, Math.min(max, n));
+    // Show count numerically + a few pips (to fit mobile)
+    const label = document.createElement('span');
+    label.textContent = shown;
+    label.style.fontWeight = '700';
+    label.style.marginRight = '4px';
+    container.appendChild(label);
+    const pipsToDraw = Math.min(shown, 5);
+    for (let i = 0; i < pipsToDraw; i++) {
+      const pip = document.createElement('span');
+      pip.className = 'pip';
+      container.appendChild(pip);
     }
   }
 
-  function renderMyHand(view) {
-    const handEl = $("#my-hand");
-    handEl.innerHTML = "";
-    const hand = view.yourHand || [];
-    const sorted = Cards.sortHand(hand, view.trumpSuit);
-    const legalCardIds = getLegalCardIds(view);
-    const isPlay = view.phase === "play";
-    const isPick = view.phase === "trump_pick1" || view.phase === "trump_pick2";
-    const indicatorId = view.trumpIndicator?.id;
+  // Opponents (top/left/right): face-down backs for each card in hand.
+  function renderOpponentSeats(v) {
+    const handCounts = v.handCounts || [0, 0, 0, 0];
+    for (let seat = 0; seat < 4; seat++) {
+      if (seat === state.yourSeat) continue;
+      const slot = slotOfSeat(seat);
+      if (!slot || slot === 'bottom') continue;
+      const el = document.getElementById('seat-' + slot);
+      if (!el) continue;
 
-    for (const c of sorted) {
-      const el = Cards.element(c);
-      const isIndicator = indicatorId && c.id === indicatorId;
-      if (isIndicator) el.classList.add("trump-indicator");
+      el.querySelector('.seat-name').textContent = nameOfSeat(seat);
+      el.querySelector('.seat-name').classList.toggle('active', v.currentPlayer === seat);
 
-      const canTap =
-        (isPlay && view.currentPlayer === state.yourSeat && legalCardIds.has(c.id)) ||
-        (isPick && view.currentPlayer === state.yourSeat);
-
-      if (canTap) {
-        el.classList.add("playable");
-        el.tabIndex = 0;
-        el.addEventListener("click", () => onCardTap(c, view));
-        el.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onCardTap(c, view); }
-        });
-      } else if (isPlay && view.currentPlayer === state.yourSeat) {
-        el.classList.add("unplayable");
+      const cardsEl = el.querySelector('.seat-cards');
+      cardsEl.innerHTML = '';
+      const count = handCounts[seat] || 0;
+      const toDraw = Math.min(count, 8);
+      for (let i = 0; i < toDraw; i++) {
+        cardsEl.appendChild(Cards.renderBack());
       }
 
-      if (state.selectedCardId === c.id) el.classList.add("selected");
-      handEl.appendChild(el);
+      // Bid indicator
+      const bidEl = el.querySelector('.seat-bid');
+      bidEl.textContent = bidLabelFor(v, seat);
     }
   }
 
-  function getLegalCardIds(view) {
+  function bidLabelFor(v, seat) {
+    if (!v) return '';
+    if (v.highBid && v.highBid.bidder === seat) {
+      return 'bid ' + displayBid(v.highBid.amount);
+    }
+    if (v.passedSeats && Array.isArray(v.passedSeats) && v.passedSeats.indexOf(seat) !== -1) {
+      return 'pass';
+    }
+    return '';
+  }
+
+  function renderYouSeat(v) {
+    const el = $('#seat-bottom');
+    el.querySelector('.seat-name').textContent = nameOfSeat(state.yourSeat) + ' (you)';
+    el.querySelector('.seat-name').classList.toggle('active', v.currentPlayer === state.yourSeat);
+    renderHand(v.yourHand || [], legalCardIdsFromView(v));
+  }
+
+  function legalCardIdsFromView(v) {
+    const actions = v.legalActions || [];
     const set = new Set();
-    const legal = view.legalActions || [];
-    for (const a of legal) {
-      if (a.type === "playCard" && Array.isArray(a.cardIds))
-        a.cardIds.forEach((id) => set.add(id));
-      if (a.type === "pickTrump" && Array.isArray(a.cardIds))
-        a.cardIds.forEach((id) => set.add(id));
+    for (const a of actions) {
+      if ((a.type === 'playCard' || a.type === 'pickTrump') && Array.isArray(a.cardIds)) {
+        for (const id of a.cardIds) set.add(id);
+      }
     }
     return set;
   }
 
-  function onCardTap(card, view) {
-    if (view.phase === "trump_pick1" || view.phase === "trump_pick2") {
-      socket.emit("action", { type: "pickTrump", cardId: card.id });
+  function renderHand(hand, legalIds) {
+    const el = $('#your-hand');
+    el.innerHTML = '';
+    // Sort hand by suit then rank for stable display
+    const sorted = hand.slice().sort(cardSortCompare);
+    for (const c of sorted) {
+      const legal = legalIds.has(c.id);
+      const cardEl = Cards.render(c, {
+        legal: legal,
+        onClick: (card) => onCardTap(card, legal),
+      });
+      el.appendChild(cardEl);
+    }
+  }
+
+  function cardSortCompare(a, b) {
+    const SUIT_ORD = { S: 0, H: 1, D: 2, C: 3 };
+    const RANK_ORD = { '7': 0, '8': 1, Q: 2, K: 3, '10': 4, A: 5, '9': 6, J: 7 };
+    if (a.suit !== b.suit) return SUIT_ORD[a.suit] - SUIT_ORD[b.suit];
+    return RANK_ORD[b.rank] - RANK_ORD[a.rank]; // high to low within suit
+  }
+
+  function onCardTap(card, legal) {
+    const v = state.view;
+    if (!v) return;
+    const phase = v.phase;
+    if (phase === 'trump_pick1' || phase === 'trump_pick2') {
+      // pickTrump legality: any of your 4/8 cards (legalIds already contains them)
+      const ids = legalCardIdsFromView(v);
+      if (!ids.has(card.id)) { toast('Not your turn'); return; }
+      socket.emit('action', { type: 'pickTrump', cardId: card.id });
       return;
     }
-    if (view.phase !== "play") return;
-    // Closed-game face-down discards: server marks the legal action with
-    // faceDownRequired. We auto-faceDown when the card isn't lead-suit.
-    const legal = (view.legalActions || []).find((a) => a.type === "playCard");
-    const faceDown = legal?.faceDownRequired || false;
-    socket.emit("action", { type: "playCard", cardId: card.id, faceDown });
+    if (phase === 'play') {
+      if (!legal) { toast('Card not legal here'); return; }
+      // faceDown: if we cannot follow suit AND game is closed, server likely
+      // expects face-down. We compute as suggestion — server is authoritative.
+      const faceDown = shouldPlayFaceDown(v, card);
+      socket.emit('action', { type: 'playCard', cardId: card.id, faceDown });
+      return;
+    }
+    // Otherwise ignore tap
   }
 
-  // ================= Action bar =================
-  function renderActionBar(view) {
-    const prompt = $("#action-prompt");
-    const controls = $("#action-controls");
-    controls.innerHTML = "";
-    const myTurn = view.currentPlayer === state.yourSeat;
-    const legal = view.legalActions || [];
-
-    // Prompt text
-    prompt.classList.toggle("primary", myTurn);
-    if (view.phase === "bid4" || view.phase === "bid8") {
-      prompt.textContent = myTurn
-        ? (view.phase === "bid4" ? "Your bid — min 160" : "Your bid — min 250 or pass")
-        : seatName(view, view.currentPlayer) + " is bidding…";
-    } else if (view.phase === "trump_pick1" || view.phase === "trump_pick2") {
-      prompt.textContent = myTurn
-        ? "Tap a card to set trump (placed face-down)"
-        : "Trump maker is choosing…";
-    } else if (view.phase === "open_choice") {
-      prompt.textContent = myTurn ? "Declare open or keep closed?" : "Trump maker deciding…";
-    } else if (view.phase === "play") {
-      prompt.textContent = myTurn ? "Your turn — tap a card" : seatName(view, view.currentPlayer) + "'s turn";
-    } else if (view.phase === "inspect") {
-      prompt.textContent = myTurn ? "Inspect face-down cards" : "Inspecting…";
-    } else if (view.phase === "hand_end") {
-      prompt.textContent = describeHandEnd(view);
-    } else if (view.phase === "game_over") {
-      prompt.textContent = "Game over";
-    } else if (view.phase === "waiting") {
-      prompt.textContent = "Waiting…";
-    }
-
-    if (!myTurn) return;
-    for (const a of legal) {
-      if (a.type === "bid") renderBidChips(controls, a, view);
-      else if (a.type === "pass") controls.appendChild(actionBtn("Pass", () => emit({ type: "pass" }), "btn-secondary"));
-      else if (a.type === "askPartner") controls.appendChild(actionBtn("Ask partner", () => emit({ type: "askPartner" }), "btn-secondary"));
-      else if (a.type === "demandRedeal") controls.appendChild(actionBtn("Redeal", () => emit({ type: "demandRedeal" }), "btn-secondary"));
-      else if (a.type === "declareOpen") controls.appendChild(actionBtn("Open", () => emit({ type: "declareOpen" }), "btn-primary"));
-      else if (a.type === "declareClosed") controls.appendChild(actionBtn("Closed", () => emit({ type: "declareClosed" }), "btn-secondary"));
-      else if (a.type === "continue") controls.appendChild(actionBtn("Continue", () => emit({ type: "continue" }), "btn-primary"));
-    }
+  function shouldPlayFaceDown(v, card) {
+    if (!v || !v.currentTrick || v.currentTrick.length === 0) return false;
+    if (v.isOpenTrump) return false;
+    const lead = v.currentTrick[0];
+    const leadSuit = lead && lead.card ? lead.card.suit : null;
+    if (!leadSuit) return false;
+    if (card.suit === leadSuit) return false;
+    // We can't follow suit — in a closed game we play face-down.
+    return !v.trumpRevealed;
   }
 
-  function renderBidChips(parent, action, view) {
-    const amounts = Array.isArray(action.amounts) ? action.amounts.slice() : [];
-    const rare = new Set([190]); // de-emphasize per docs/DECISIONS.md
-    const isPCCAllowed = !!action.canCloseCaps;
+  function renderTrick(trick) {
+    // Clear all 4 slots
+    const slots = {
+      top: document.querySelector('.trick-card.slot-top'),
+      right: document.querySelector('.trick-card.slot-right'),
+      bottom: document.querySelector('.trick-card.slot-bottom'),
+      left: document.querySelector('.trick-card.slot-left'),
+    };
+    for (const slot of Object.values(slots)) { if (slot) slot.innerHTML = ''; }
 
-    // Always surface a Pass button if separately offered — handled elsewhere.
-    for (const a of amounts) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "bid-chip";
-      if (rare.has(a)) btn.classList.add("rare");
-      btn.textContent = String(Cards.displayPoints(a * 10));
-      btn.addEventListener("click", () => emit({ type: "bid", amount: a }));
-      parent.appendChild(btn);
-    }
+    for (const p of trick) {
+      if (!p) continue;
+      const slotName = slotOfSeat(p.seat);
+      const slot = slots[slotName];
+      if (!slot) continue;
+      slot.innerHTML = '';
+      const tag = document.createElement('div');
+      tag.className = 'seat-tag';
+      tag.textContent = nameOfSeat(p.seat);
+      slot.appendChild(tag);
 
-    // Custom entry for odd amounts (e.g. 190 when truly wanted)
-    const wrap = document.createElement("div");
-    wrap.className = "bid-custom";
-    const input = document.createElement("input");
-    input.type = "number";
-    input.min = action.min || (view.phase === "bid8" ? 250 : 160);
-    input.step = 10;
-    input.placeholder = "Other";
-    input.setAttribute("inputmode", "numeric");
-    const submit = document.createElement("button");
-    submit.type = "button";
-    submit.className = "btn-chip";
-    submit.textContent = "Bid";
-    submit.addEventListener("click", () => {
-      const v = Number(input.value);
-      if (!v || v < input.min || v % 10 !== 0) return toast("Bid must be a multiple of 10");
-      emit({ type: "bid", amount: v });
-    });
-    wrap.appendChild(input);
-    wrap.appendChild(submit);
-    parent.appendChild(wrap);
-
-    if (isPCCAllowed) {
-      parent.appendChild(actionBtn("PCC (all 8)",
-        () => emit({ type: "bid", amount: 9999, isCloseCaps: true }),
-        "btn-primary"));
+      const isFaceDown = !!(p.faceDown || p.hidden);
+      let cardEl;
+      if (isFaceDown && !p.card) {
+        cardEl = Cards.renderBack();
+      } else if (isFaceDown) {
+        cardEl = Cards.renderBack();
+      } else {
+        cardEl = Cards.render(p.card, { small: false });
+      }
+      slot.appendChild(cardEl);
     }
   }
 
-  function actionBtn(label, onClick, cls = "btn-secondary") {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = cls;
-    b.textContent = label;
-    b.addEventListener("click", onClick);
-    return b;
-  }
+  // ---- Action bar -----------------------------------------------------------
+  function renderActionBar(v) {
+    const chipsEl = $('#action-chips');
+    const extrasEl = $('#action-extras');
+    chipsEl.innerHTML = '';
+    extrasEl.innerHTML = '';
 
-  function emit(payload) {
-    socket.emit("action", payload);
-  }
+    const actions = v.legalActions || [];
+    const yourTurn = v.currentPlayer === state.yourSeat;
 
-  function seatName(view, seat) {
-    return view.seats?.[seat]?.name || `Seat ${seat}`;
-  }
-
-  function describeHandEnd(view) {
-    const r = view.handResult;
-    if (!r) return "Hand ended.";
-    const maker = seatName(view, r.trumpMaker);
-    const teamLabel = r.trumpMakerTeam === (state.yourSeat % 2) ? "your team" : "opponents";
-    const verb = r.succeeded ? "made the bid" : "failed the bid";
-    const bid = r.isCloseCaps ? "PCC" : Cards.displayPoints(r.bidAmount * 10);
-    const pts = Cards.displayPoints(r.makerPoints);
-    const hc = r.highCourt ? " (High court!)" : "";
-    return `${teamLabel} ${verb} — bid ${bid}, got ${pts}${hc}.`;
-  }
-
-  // ================= Modal =================
-  function openModal(title, content) {
-    $("#modal-title").textContent = title;
-    $("#modal-content").textContent = content;
-    $("#modal-cancel").classList.add("hidden");
-    if (typeof modal.showModal === "function") modal.showModal();
-    else toast(content);
-  }
-
-  // ================= Helpers =================
-  function shareURL() {
-    const u = new URL(location.href);
-    u.search = "?room=" + encodeURIComponent(state.roomId || "");
-    u.hash = "";
-    return u.toString();
-  }
-  function updateShareURL(roomId) {
-    const u = new URL(location.href);
-    u.searchParams.set("room", roomId);
-    history.replaceState(null, "", u.toString());
-  }
-  function escapeHTML(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-    }[c]));
-  }
-
-  // ================= Dispatch =================
-  function applyView(view) {
-    if (!view) return;
-    state.lastView = view;
-    if (view.yourSeat != null) state.yourSeat = view.yourSeat;
-    if (view.roomId) state.roomId = view.roomId;
-    state.isHost = state.yourSeat === 0;
-
-    const p = view.phase;
-    if (p === "waiting" || !p) {
-      showView("lobby");
-      renderLobby(view);
-    } else {
-      showView("table");
-      renderTable(view);
+    if (!actions.length) {
+      const hint = document.createElement('div');
+      hint.className = 'chip ghost';
+      hint.textContent = yourTurn ? 'Tap a card' : 'Waiting…';
+      chipsEl.appendChild(hint);
+      return;
     }
 
-    // Show log (if any)
-    if (view.log?.length) {
-      const list = $("#log-list");
-      list.innerHTML = "";
-      for (const line of view.log.slice(-20)) {
-        const li = document.createElement("li");
-        li.textContent = line;
-        list.appendChild(li);
+    for (const a of actions) {
+      switch (a.type) {
+        case 'bid': renderBidAction(a, chipsEl, extrasEl); break;
+        case 'pass': addChip(chipsEl, 'Pass', 'pass', () => emitAction({ type: 'pass' })); break;
+        case 'askPartner': addChip(chipsEl, 'Ask partner', '', () => emitAction({ type: 'askPartner' })); break;
+        case 'demandRedeal': addChip(chipsEl, 'Demand redeal', 'danger', () => emitAction({ type: 'demandRedeal' })); break;
+        case 'declareOpen': addChip(chipsEl, 'Declare open', 'primary', () => emitAction({ type: 'declareOpen' })); break;
+        case 'declareClosed': addChip(chipsEl, 'Play closed', '', () => emitAction({ type: 'declareClosed' })); break;
+        case 'continue': addChip(chipsEl, 'Continue', 'primary', () => emitAction({ type: 'continue' })); break;
+        case 'playCard': {
+          // Just a hint — actual play is by tapping a card.
+          const hint = document.createElement('div');
+          hint.className = 'chip ghost';
+          hint.textContent = 'Tap a card';
+          chipsEl.appendChild(hint);
+          break;
+        }
+        case 'pickTrump': {
+          const hint = document.createElement('div');
+          hint.className = 'chip ghost';
+          hint.textContent = 'Tap a card to set trump';
+          chipsEl.appendChild(hint);
+          break;
+        }
+        default: break;
       }
     }
   }
 
-  // ================= Menu / log drawer =================
-  $("#btn-menu").addEventListener("click", () => {
-    $("#log-drawer").classList.toggle("hidden");
-  });
-  $("#log-close").addEventListener("click", () => {
-    $("#log-drawer").classList.add("hidden");
-  });
+  function addChip(parent, label, cls, onClick) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (cls ? ' ' + cls : '');
+    b.textContent = label;
+    b.addEventListener('click', onClick);
+    parent.appendChild(b);
+  }
 
-  // Initial view
-  showView("landing");
+  function renderBidAction(action, chipsEl, extrasEl) {
+    const suggested = [160, 170, 180, 200, 210, 220, 250];
+    const allowed = Array.isArray(action.amounts) ? action.amounts : suggested;
+    const allowedSet = new Set(allowed);
+
+    const chipVals = suggested.filter((v) => allowedSet.has(v));
+    for (const amt of chipVals) {
+      addChip(chipsEl, displayBid(amt), '', () => emitAction({ type: 'bid', amount: amt }));
+    }
+    // Also any allowed bids not in suggested set (rare amounts)
+    const extras = allowed.filter((v) => !chipVals.includes(v));
+    for (const amt of extras.slice(0, 3)) {
+      addChip(chipsEl, displayBid(amt), 'ghost', () => emitAction({ type: 'bid', amount: amt }));
+    }
+
+    // Custom input
+    const wrap = document.createElement('div');
+    wrap.className = 'bid-custom';
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.step = '10';
+    input.min = String(Math.min.apply(null, allowed));
+    input.className = 'bid-input';
+    input.placeholder = 'custom';
+    const go = document.createElement('button');
+    go.className = 'chip primary';
+    go.textContent = 'Bid';
+    go.addEventListener('click', () => {
+      const raw = parseInt(input.value, 10);
+      if (!raw || raw % 10 !== 0) { toast('Bids are multiples of 10'); return; }
+      emitAction({ type: 'bid', amount: raw });
+    });
+    extrasEl.appendChild(input);
+    extrasEl.appendChild(go);
+  }
+
+  function emitAction(payload) {
+    socket.emit('action', payload);
+  }
+
+  function renderLog(entries) {
+    const list = $('#log');
+    list.innerHTML = '';
+    const last = entries.slice(-10);
+    for (const e of last) {
+      const li = document.createElement('li');
+      li.textContent = typeof e === 'string' ? e : (e && e.text) || JSON.stringify(e);
+      list.appendChild(li);
+    }
+  }
+
+  // ---- Helpers --------------------------------------------------------------
+  // Internal bid amounts are integer multiples of 10; display is /10.
+  function displayBid(internal) {
+    if (internal == null) return '';
+    const n = internal / 10;
+    return (internal % 10 === 0) ? String(n) : n.toFixed(1);
+  }
+
+  function displayPoints(internal) {
+    return String(internal / 10);
+  }
+
+  // Expose a tiny debug hook without leaking the whole closure.
+  window.__p304 = { state, socket, displayBid, displayPoints };
 })();
