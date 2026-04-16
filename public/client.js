@@ -4,7 +4,7 @@
 (function () {
   'use strict';
 
-  const socket = io();
+  const socket = io({ reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 400 });
 
   // ---- UI state -------------------------------------------------------------
   const state = {
@@ -13,7 +13,29 @@
     roomId: null,
     yourSeat: null,
     view: null,            // last PlayerView from server
+    startPending: false,   // Start Game button debounce
   };
+
+  // ---- Session persistence (survives reloads & socket reconnects) ----------
+  const SESSION_KEY = 'p304.session';
+  function saveSession() {
+    try {
+      if (state.roomId && state.name) {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+          roomId: state.roomId, name: state.name, seat: state.yourSeat,
+        }));
+      }
+    } catch (e) { /* private mode, ignore */ }
+  }
+  function loadSession() {
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function clearSession() {
+    try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
+  }
 
   const SEAT_LABELS = ['North', 'East', 'South', 'West']; // fallback labels
   const PHASE_LABELS = {
@@ -47,7 +69,19 @@
     }
     app.className = 'screen-' + name;
   }
+  // If we have a saved session, stay on landing only until the resume
+  // handshake comes back. Otherwise landing is the default.
   setScreen('landing');
+  {
+    const sess = loadSession();
+    if (sess && sess.roomId && sess.name) {
+      // Show a brief "reconnecting" hint so the user knows their seat is
+      // being restored (prevents the perceived "looping back to start").
+      setTimeout(() => {
+        if (state.screen === 'landing' && !state.view) toast('Reconnecting to your game…', false);
+      }, 300);
+    }
+  }
 
   function toast(msg, isError) {
     toastEl.textContent = msg;
@@ -85,14 +119,28 @@
   });
 
   // ---- Socket listeners -----------------------------------------------------
-  socket.on('connect', () => { /* connected */ });
+  // On every connect (initial OR reconnect): if we have a saved session,
+  // ask the server to re-bind this socket to our seat. This is what keeps
+  // Railway proxy reconnects from kicking us back to the landing screen.
+  socket.on('connect', () => {
+    const sess = loadSession();
+    if (sess && sess.roomId && sess.name) {
+      state.roomId = sess.roomId;
+      state.name = sess.name;
+      if (typeof sess.seat === 'number') state.yourSeat = sess.seat;
+      socket.emit('resume', { roomId: sess.roomId, name: sess.name });
+    }
+  });
 
   socket.on('disconnect', () => { toast('Disconnected — retrying...'); });
+  socket.io.on('reconnect_attempt', () => { /* silent */ });
+  socket.on('connect_error', (err) => { console.warn('connect_error', err && err.message); });
 
   socket.on('roomCreated', (payload) => {
     state.roomId = payload.roomId;
     state.yourSeat = payload.seat;
     state.view = payload.view || null;
+    saveSession();
     setScreen('lobby');
     renderLobby();
   });
@@ -101,8 +149,14 @@
     state.yourSeat = payload.seat;
     state.view = payload.view || null;
     if (state.view && state.view.roomId) state.roomId = state.view.roomId;
-    setScreen('lobby');
-    renderLobby();
+    saveSession();
+    if (state.view && state.view.phase && state.view.phase !== 'waiting') {
+      setScreen('table');
+      safeRender(renderTable);
+    } else {
+      setScreen('lobby');
+      safeRender(renderLobby);
+    }
   });
 
   socket.on('view', (payload) => {
@@ -110,27 +164,65 @@
     state.view = view;
     if (view && typeof view.yourSeat === 'number') state.yourSeat = view.yourSeat;
     if (view && view.roomId) state.roomId = view.roomId;
+    saveSession();
+    // A view always clears any pending Start Game spinner.
+    if (state.startPending) resetStartButton();
     if (view && view.phase === 'waiting') {
       setScreen('lobby');
-      renderLobby();
+      safeRender(renderLobby);
     } else {
       setScreen('table');
-      renderTable();
+      safeRender(renderTable);
     }
   });
 
   socket.on('actionError', (p) => {
     const reason = (p && p.reason) || 'Illegal action';
+    // If our session is stale (server restarted, room GC'd), clear it and
+    // return to landing — but only for session-invalidating reasons, not
+    // for ordinary in-game illegal moves.
+    if (reason === 'room not found' || reason === 'no seat to resume') {
+      clearSession();
+      state.roomId = null;
+      state.yourSeat = null;
+      state.view = null;
+      setScreen('landing');
+      toast('Session expired — create a new room');
+      return;
+    }
+    if (state.startPending) resetStartButton();
     toast(reason);
   });
 
+  function safeRender(fn) {
+    try { fn(); } catch (e) {
+      console.error('render error', e);
+      toast('Render hiccup — retrying');
+    }
+  }
+
+  function resetStartButton() {
+    state.startPending = false;
+    const btn = document.getElementById('start-btn');
+    if (btn) { btn.disabled = false; btn.textContent = 'Start game'; }
+  }
+
   // ---- Lobby rendering ------------------------------------------------------
   $('#leave-btn').addEventListener('click', () => {
+    clearSession();
     window.location.reload();
   });
 
-  $('#start-btn').addEventListener('click', () => {
+  $('#start-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (state.startPending) return;
+    state.startPending = true;
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
     socket.emit('startGame');
+    // Failsafe: if no view/error arrives within 4s, re-enable the button.
+    setTimeout(() => { if (state.startPending) resetStartButton(); }, 4000);
   });
 
   function renderLobby() {

@@ -219,12 +219,20 @@ io.on('connection', (socket) => {
     const room = findRoom(roomId);
     if (!room) return emitError(socket, 'room not found');
     const playerName = (name && String(name).trim()) || '';
+    // Reclaim the first human seat matching this name, even if a stale
+    // socket id is still registered (the old connection may not have fired
+    // `disconnect` yet). This is the key to surviving a reconnect.
     let found = -1;
     for (let s = 0; s < 4; s++) {
       const info = room.state.seats[s];
-      if (info && !info.isAI && info.name === playerName && !room.sockets.get(s)) { found = s; break; }
+      if (info && !info.isAI && info.name === playerName) { found = s; break; }
     }
     if (found < 0) return emitError(socket, 'no seat to resume');
+    const priorSid = room.sockets.get(found);
+    if (priorSid && priorSid !== socket.id) {
+      const prior = io.sockets.sockets.get(priorSid);
+      if (prior) { try { prior.leave(room.code); } catch (_) {} prior.data = prior.data || {}; prior.data.roomId = null; prior.data.seat = null; }
+    }
     room.sockets.set(found, socket.id);
     socket.data.roomId = room.code;
     socket.data.seat = found;
