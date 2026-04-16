@@ -133,6 +133,17 @@ function legalActions(state, seat) {
     case 'trump_pick2':
       return legalTrumpPickActions(state, seat);
     case 'bid8': return legalBid8Actions(state, seat);
+    case 'open_choice':
+      return seat === state.trumpMaker
+        ? [{ type: 'declareOpen' }, { type: 'declareClosed' }]
+        : [];
+    case 'play': {
+      if (seat !== state.currentPlayer) return [];
+      const ids = legalPlayIds(state, seat);
+      return ids.length ? [{ type: 'playCard', cardIds: ids }] : [];
+    }
+    case 'inspect':
+      return seat === state.trumpMaker ? [{ type: 'continue' }] : [];
     default: return [];
   }
 }
@@ -215,6 +226,9 @@ function applyAction(state, seat, action) {
     case 'trump_pick1': return applyTrumpPick(state, seat, action, /*afterBid8*/ false);
     case 'bid8': return applyBid8(state, seat, action);
     case 'trump_pick2': return applyTrumpPick(state, seat, action, /*afterBid8*/ true);
+    case 'open_choice': return applyOpenChoice(state, seat, action);
+    case 'play': return applyPlay(state, seat, action);
+    case 'inspect': return applyInspect(state, seat, action);
     default:
       throw new Error(`applyAction: phase ${state.phase} not implemented`);
   }
@@ -341,6 +355,240 @@ function enterOpenChoice(s) {
   s.currentBidder = null;
   s.message = `Seat ${s.trumpMaker} chooses Open or Closed`;
   s.log = appendLog(s.log, s.message);
+}
+
+// --- open_choice ----------------------------------------------------------
+
+function applyOpenChoice(state, seat, action) {
+  if (seat !== state.trumpMaker) throw new Error('applyOpenChoice: not trump maker');
+  const s = structuredClone(state);
+  if (action.type === 'declareOpen') {
+    s.isOpenTrump = true;
+    s.trumpRevealed = true;
+    // Indicator joins hand (now 8 cards for maker too).
+    s.hands[s.trumpMaker].push(s.trumpIndicator);
+    s.message = `Seat ${s.trumpMaker} declares OPEN (${s.trumpSuit})`;
+  } else if (action.type === 'declareClosed') {
+    s.isOpenTrump = false;
+    s.trumpRevealed = false;
+    s.message = `Seat ${s.trumpMaker} keeps the trump CLOSED`;
+  } else {
+    throw new Error('applyOpenChoice: expected declareOpen or declareClosed');
+  }
+  s.log = appendLog(s.log, s.message);
+  enterPlay(s);
+  return s;
+}
+
+function enterPlay(s) {
+  s.phase = 'play';
+  s.trickLeader = next(s.dealer);       // dealer's right leads trick 1
+  s.currentPlayer = s.trickLeader;
+  s.currentTrick = [];
+  s.tricksPlayed = 0;
+  s.tricksWon = [0, 0];
+  s.trickPoints = [0, 0];
+  s.lastTrick = null;
+}
+
+// --- play -----------------------------------------------------------------
+
+// Returns the array of card IDs the seat may legally play right now.
+function legalPlayIds(state, seat) {
+  const hand = state.hands[seat];
+  const isMaker = seat === state.trumpMaker;
+  const indicatorAvail =
+    isMaker && !state.trumpRevealed && state.trumpIndicator && !state._indicatorPlayed;
+  const effective = indicatorAvail ? hand.concat([state.trumpIndicator]) : hand;
+  const leading = state.currentTrick.length === 0;
+
+  if (leading) {
+    let candidates = effective.slice();
+    // Trump indicator cannot be led except in trick 8 (when maker only has it).
+    if (indicatorAvail) {
+      const isTrick8 = state.tricksPlayed === 7;
+      if (!isTrick8) {
+        candidates = candidates.filter((c) => c.id !== state.trumpIndicator.id);
+      }
+    }
+    // First-trick lead restriction for trump maker in closed: no trump lead.
+    if (isMaker && !state.isOpenTrump && !state.trumpRevealed && state.tricksPlayed === 0) {
+      const nonTrump = candidates.filter((c) => c.suit !== state.trumpSuit);
+      if (nonTrump.length > 0) candidates = nonTrump;
+    }
+    // Exhausted-trumps rule (only meaningful once trump is revealed and
+    // opponents are known to hold zero trumps).
+    if (isMaker && state.trumpRevealed) {
+      const totalTrumpsPlayed = countTrumpsPlayed(state);
+      const opponentsTrumps = 8 /*per suit*/ - totalTrumpsPlayed - hand.filter((c) => c.suit === state.trumpSuit).length;
+      if (opponentsTrumps === 0) {
+        const makerTrumps = candidates.filter((c) => c.suit === state.trumpSuit);
+        if (makerTrumps.length > 0) candidates = makerTrumps;
+      }
+    }
+    return candidates.map((c) => c.id);
+  }
+
+  // Following.
+  const lead = state.currentTrick[0].card.suit;
+  const follow = effective.filter((c) => c.suit === lead);
+  if (follow.length > 0) return follow.map((c) => c.id);
+  // Can't follow: any card (face-up in open, face-down in closed — handled on apply).
+  return effective.map((c) => c.id);
+}
+
+function countTrumpsPlayed(state) {
+  // Count trump-suit cards visible across all prior tricks' logs.
+  // We keep a running count via state._trumpsPlayed so we don't scan on every call.
+  return state._trumpsPlayed || 0;
+}
+
+function applyPlay(state, seat, action) {
+  if (seat !== state.currentPlayer) throw new Error('applyPlay: not your turn');
+  if (action.type !== 'playCard') throw new Error('applyPlay: expected playCard');
+  const legal = new Set(legalPlayIds(state, seat));
+  if (!legal.has(action.cardId)) throw new Error(`applyPlay: illegal card ${action.cardId}`);
+
+  const s = structuredClone(state);
+  let card;
+  let isIndicator = false;
+  const idxH = s.hands[seat].findIndex((c) => c.id === action.cardId);
+  if (idxH >= 0) {
+    card = s.hands[seat][idxH];
+    s.hands[seat].splice(idxH, 1);
+  } else if (
+    seat === s.trumpMaker && !s.trumpRevealed && s.trumpIndicator &&
+    s.trumpIndicator.id === action.cardId
+  ) {
+    card = s.trumpIndicator;
+    isIndicator = true;
+    s._indicatorPlayed = true;
+  } else {
+    throw new Error('applyPlay: card not found');
+  }
+
+  const leading = s.currentTrick.length === 0;
+  const lead = leading ? null : s.currentTrick[0].card.suit;
+  let faceDown = false;
+  if (!leading && !s.isOpenTrump && !s.trumpRevealed && card.suit !== lead) {
+    // Closed game, can't follow suit → face-down.
+    faceDown = true;
+  }
+  // Trump maker leading the indicator on trick 8 → face-up reveal.
+  if (leading && isIndicator) {
+    faceDown = false;
+  }
+
+  s.currentTrick.push({ seat, card, faceDown, isTrumpIndicator: isIndicator });
+  // Running trump count (only counts face-up trumps we can see).
+  if (card.suit === s.trumpSuit && !faceDown) {
+    s._trumpsPlayed = (s._trumpsPlayed || 0) + 1;
+  }
+
+  s.message = faceDown
+    ? `Seat ${seat} plays face-down`
+    : `Seat ${seat} plays ${card.rank}${card.suit}`;
+  s.log = appendLog(s.log, s.message);
+
+  if (s.currentTrick.length < 4) {
+    s.currentPlayer = next(seat);
+    return s;
+  }
+  return endTrick(s);
+}
+
+function endTrick(s) {
+  const hasFaceDown = s.currentTrick.some((p) => p.faceDown);
+  // Open game, or closed with no face-downs → resolve immediately.
+  if (s.isOpenTrump || s.trumpRevealed || !hasFaceDown) {
+    return finalizeTrick(s, /*revealedNow*/ false);
+  }
+  // Closed + face-downs present → enter inspect phase for trump maker.
+  s.phase = 'inspect';
+  s.currentPlayer = s.trumpMaker;
+  s.message = `Trump maker inspects face-down cards`;
+  s.log = appendLog(s.log, s.message);
+  return s;
+}
+
+// --- inspect --------------------------------------------------------------
+
+function applyInspect(state, seat, action) {
+  if (seat !== state.trumpMaker) throw new Error('applyInspect: only trump maker');
+  if (action.type !== 'continue') throw new Error('applyInspect: expected continue');
+  const s = structuredClone(state);
+  // If any face-down card in the trick is the trump suit (either a normal
+  // discard that happens to be a trump, or the indicator itself), reveal
+  // trump and treat those as valid trumps. Trump maker's own face-down
+  // non-trump discard remains hidden.
+  const trumpyFaceDown = s.currentTrick.some(
+    (p) => p.faceDown && p.card.suit === s.trumpSuit
+  );
+  let revealedNow = false;
+  if (trumpyFaceDown) {
+    s.trumpRevealed = true;
+    s.isOpenTrump = true;
+    revealedNow = true;
+    // Reveal all trumpy face-down cards (flip their faceDown off).
+    for (const p of s.currentTrick) {
+      if (p.faceDown && p.card.suit === s.trumpSuit) p.faceDown = false;
+    }
+    // Indicator reveal: if the maker did NOT play the indicator as the cut
+    // card, it joins their hand now.
+    if (!s._indicatorPlayed) {
+      s.hands[s.trumpMaker].push(s.trumpIndicator);
+    }
+    s.message = `Trump (${s.trumpSuit}) revealed!`;
+    s.log = appendLog(s.log, s.message);
+  }
+  return finalizeTrick(s, revealedNow);
+}
+
+// --- trick finalization ---------------------------------------------------
+
+function finalizeTrick(s, revealedNow) {
+  s.phase = 'play';
+  const trump = s.trumpRevealed || s.isOpenTrump ? s.trumpSuit : null;
+  const lead = s.currentTrick[0].card.suit;
+  const winnerIdx = winningIndex(s.currentTrick, trump, lead, /*faceDownIsHidden*/ true);
+  const winnerSeat = s.currentTrick[winnerIdx].seat;
+  const trickPoints = s.currentTrick.reduce((sum, p) => sum + cardPoints(p.card), 0);
+
+  s.tricksWon[teamOf(winnerSeat)] += 1;
+  s.trickPoints[teamOf(winnerSeat)] += trickPoints;
+  s.tricksPlayed += 1;
+  s.lastTrick = s.currentTrick.slice();
+  s.currentTrick = [];
+  s.trickLeader = winnerSeat;
+  s.currentPlayer = winnerSeat;
+  s.message = `Seat ${winnerSeat} wins trick ${s.tricksPlayed}` +
+    (revealedNow ? ' (trump revealed)' : '');
+  s.log = appendLog(s.log, s.message);
+
+  // Auto-open after trick 1 if final bid ≥ 250 and still closed.
+  if (
+    s.tricksPlayed === 1 && !s.isOpenTrump && !s.trumpRevealed &&
+    s.highBid && s.highBid.amount >= 250
+  ) {
+    s.trumpRevealed = true;
+    s.isOpenTrump = true;
+    if (!s._indicatorPlayed) s.hands[s.trumpMaker].push(s.trumpIndicator);
+    s.message = `Bid ≥ 250: trump (${s.trumpSuit}) auto-revealed`;
+    s.log = appendLog(s.log, s.message);
+  }
+
+  if (s.tricksPlayed === 8) {
+    return enterHandEnd(s);
+  }
+  return s;
+}
+
+function enterHandEnd(s) {
+  s.phase = 'hand_end';
+  s.currentPlayer = null;
+  s.message = `Hand ${s.handNumber} complete: points ${s.trickPoints.join('/')}, tricks ${s.tricksWon.join('/')}`;
+  s.log = appendLog(s.log, s.message);
+  return s;
 }
 
 function applyBid4(state, seat, action) {
@@ -479,7 +727,8 @@ function viewFor(state, seat) {
     // Trump indicator + suit visible only to trump maker until revealed.
     trumpIndicator:
       s.trumpRevealed || seat === s.trumpMaker ? s.trumpIndicator : null,
-    trumpSuit: s.trumpRevealed ? s.trumpSuit : null,
+    trumpSuit:
+      s.trumpRevealed || seat === s.trumpMaker ? s.trumpSuit : null,
     trumpRevealed: s.trumpRevealed,
     // Current trick: mask face-down cards for non-trump-maker seats.
     currentTrick: s.currentTrick.map((p) =>
