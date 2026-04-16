@@ -207,6 +207,7 @@
   // ---- Socket listeners -----------------------------------------------------
   const reconnectOverlay = $('#reconnect-overlay');
   let reconnectDelayTimer = null;
+  let everConnected = false;
   function showReconnecting() {
     if (reconnectOverlay) reconnectOverlay.classList.remove('hidden');
   }
@@ -215,17 +216,27 @@
     if (reconnectDelayTimer) { clearTimeout(reconnectDelayTimer); reconnectDelayTimer = null; }
   }
 
+  function resetToLanding(msg) {
+    try { localStorage.removeItem('p304.room'); } catch (e) {}
+    state.roomId = null;
+    state.yourSeat = null;
+    state.view = null;
+    setScreen('landing');
+    if (msg) toast(msg);
+  }
+
   socket.on('connect', () => {
     hideReconnecting();
-    // On reconnect, attempt to rejoin last room for resume.
-    if (state.roomId && state.screen !== 'landing') {
+    // Only attempt a rejoin if we previously had a live session in this tab.
+    // (everConnected guards against a first-load stale-state loop.)
+    if (everConnected && state.roomId && state.screen !== 'landing') {
       socket.emit('joinRoom', { roomId: state.roomId, name: state.name || '', clientId });
     }
+    everConnected = true;
   });
 
   socket.on('disconnect', () => {
     toast('Disconnected — retrying...');
-    // Delay overlay so quick blips don't flash.
     if (reconnectDelayTimer) clearTimeout(reconnectDelayTimer);
     reconnectDelayTimer = setTimeout(showReconnecting, 1500);
   });
@@ -338,6 +349,13 @@
 
   socket.on('actionError', (p) => {
     const reason = (p && p.reason) || 'Illegal action';
+    // Self-healing: stale state from a previous server run/redeploy.
+    // If we hear "room not found" or "no room", wipe our cached room and
+    // bounce to landing so the user can start fresh.
+    if (reason === 'room not found' || reason === 'no room') {
+      resetToLanding(reason);
+      return;
+    }
     toast(reason);
     try { FX.sound.illegal(); FX.haptic.illegal(); } catch (e) {}
   });
