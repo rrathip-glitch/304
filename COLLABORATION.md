@@ -29,17 +29,41 @@ Deployed on Railway via Dockerfile. See `README.md` for user-facing intro.
 
 ## How Agents Coordinate
 
-This file is the bulletin board. When multiple agents may touch the code,
-each session should:
+We operate under an **orchestrator + worker** model:
 
-1. **Check in** by reading the "Current Status" section below.
-2. **Claim** a task by adding your name/session ID next to an item in
-   `docs/TASKS.md` under "Next up".
-3. **Ship often.** Commit and push after each major module (engine, AI,
-   server, each client file, deployment config) — do NOT batch.
-4. **Check out** by updating "Current Status" here, updating `docs/TASKS.md`,
-   appending to `docs/DECISIONS.md` if you made a notable choice, and
-   pushing.
+- **Orchestrator agent**: the coordinator. Reads `docs/TASKS.md` and
+  `COLLABORATION.md`, decomposes work, assigns tasks to workers, reviews
+  shipped commits, resolves conflicts, keeps the task list crisp.
+- **Worker agent(s)**: execute one assigned task at a time end-to-end,
+  ship a commit, then report back.
+
+Protocol for every session (orchestrator or worker):
+
+1. **Sync first**: `git fetch origin && git pull origin <branch>`. Read the
+   "Current Status" section below *and* the last 20 lines of `git log`.
+2. **Claim**: edit `docs/TASKS.md`. Under "Next up", mark the item you're
+   taking with `[CLAIMED: <agent-id> <timestamp>]`. Push immediately so
+   other agents see the claim.
+3. **Scope**: one module per claim. Do not silently expand scope.
+4. **Ship often**: commit and push after each module compiles or renders.
+   Do NOT batch multiple modules in one commit.
+5. **Check out**: after your commit, update "Current Status" here, tick
+   the task in `docs/TASKS.md`, append to `docs/DECISIONS.md` if warranted,
+   push.
+6. **Handoff note**: if the next step has a non-obvious gotcha, append to
+   the "Notes to next agent" section below.
+
+### For the Orchestrator specifically
+- Keep `docs/TASKS.md` ordered by dependency, not preference.
+- When a worker pushes, review the diff before assigning the next task.
+- If a worker is stuck or drifting, reassign the scope.
+- Own the branch merge strategy. Workers do not rebase or force-push.
+
+### For Workers specifically
+- Do not modify `docs/TASKS.md` ordering — only claim/tick.
+- Do not edit another worker's in-flight files.
+- If your task turns out to be bigger than one module, stop, comment in
+  `docs/TASKS.md` explaining, and let the orchestrator split it.
 
 ## Commit Cadence (enforced)
 
