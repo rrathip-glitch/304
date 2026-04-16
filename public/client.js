@@ -16,6 +16,40 @@
     startPending: false,   // Start Game button debounce
   };
 
+  // ---- Emit gate ------------------------------------------------------------
+  // Prevents the "Start Game loops to landing" class of bugs. When the socket
+  // briefly disconnects (Railway proxy / mobile backgrounding) and the user
+  // taps a button during the gap, Socket.IO's default behavior is to buffer
+  // the event and flush it on reconnect BEFORE our `connect` handler emits
+  // `resume`. The server receives the action on a fresh socket with no seat
+  // context and returns "no room", which surfaces to the user as a dead UI.
+  //
+  // The gate holds all application emits until we know the server has bound
+  // our socket to a seat (roomCreated / roomJoined). On disconnect we close
+  // the gate so fresh user taps queue locally instead of going into
+  // Socket.IO's buffer. `resume` itself bypasses the gate — it's the only
+  // thing allowed to talk to a naked socket.
+  let emitReady = true;
+  const pendingEmits = [];
+  function openGate() {
+    emitReady = true;
+    while (pendingEmits.length) {
+      const [name, payload] = pendingEmits.shift();
+      socket.emit(name, payload);
+    }
+  }
+  function closeGate() { emitReady = false; }
+  function gatedEmit(name, payload) {
+    if (emitReady && socket.connected) {
+      socket.emit(name, payload);
+      return;
+    }
+    // Dedup: if the user mashes a button, don't stack identical emits.
+    const last = pendingEmits[pendingEmits.length - 1];
+    if (last && last[0] === name && JSON.stringify(last[1]) === JSON.stringify(payload)) return;
+    pendingEmits.push([name, payload]);
+  }
+
   // ---- Session persistence (survives reloads & socket reconnects) ----------
   const SESSION_KEY = 'p304.session';
   function saveSession() {
@@ -91,6 +125,20 @@
     toastTimer = setTimeout(() => toastEl.classList.add('hidden'), 2600);
   }
 
+  // Persistent banner for disconnected state. Different from toast: stays
+  // visible until resolved, so the user understands why taps aren't firing.
+  function setConnBanner(disconnected) {
+    let el = document.getElementById('conn-banner');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'conn-banner';
+      el.className = 'conn-banner';
+      el.textContent = 'Reconnecting…';
+      document.body.appendChild(el);
+    }
+    el.classList.toggle('visible', !!disconnected);
+  }
+
   // ---- Landing handlers -----------------------------------------------------
   const nameInput = $('#name-input');
   const codeInput = $('#code-input');
@@ -105,7 +153,7 @@
     if (!name) { toast('Enter your name first'); return; }
     state.name = name;
     try { localStorage.setItem('p304.name', name); } catch (e) {}
-    socket.emit('createRoom', { name });
+    gatedEmit('createRoom', { name });
   });
 
   $('#join-btn').addEventListener('click', () => {
@@ -115,7 +163,7 @@
     if (!roomId) { toast('Enter a room code'); return; }
     state.name = name;
     try { localStorage.setItem('p304.name', name); } catch (e) {}
-    socket.emit('joinRoom', { roomId, name });
+    gatedEmit('joinRoom', { roomId, name });
   });
 
   // ---- Socket listeners -----------------------------------------------------
@@ -123,16 +171,32 @@
   // ask the server to re-bind this socket to our seat. This is what keeps
   // Railway proxy reconnects from kicking us back to the landing screen.
   socket.on('connect', () => {
+    setConnBanner(false);
     const sess = loadSession();
     if (sess && sess.roomId && sess.name) {
+      // Close the gate until the server confirms our seat via roomJoined.
+      // Any user tap that arrives in this window queues locally and flushes
+      // after resume — it never hits a naked socket.
+      closeGate();
       state.roomId = sess.roomId;
       state.name = sess.name;
       if (typeof sess.seat === 'number') state.yourSeat = sess.seat;
       socket.emit('resume', { roomId: sess.roomId, name: sess.name });
+    } else {
+      // Fresh connection with no session — open the gate so createRoom /
+      // joinRoom can flow.
+      openGate();
     }
   });
 
-  socket.on('disconnect', () => { toast('Disconnected — retrying...'); });
+  socket.on('disconnect', () => {
+    // Close the gate immediately so nothing the user taps during the blip
+    // ends up in Socket.IO's buffer (where it would race past resume on
+    // reconnect). Show a small persistent banner instead of a fleeting toast
+    // so the user knows we're working on it.
+    closeGate();
+    setConnBanner(true);
+  });
   socket.io.on('reconnect_attempt', () => { /* silent */ });
   socket.on('connect_error', (err) => { console.warn('connect_error', err && err.message); });
 
@@ -141,6 +205,7 @@
     state.yourSeat = payload.seat;
     state.view = payload.view || null;
     saveSession();
+    openGate();
     setScreen('lobby');
     renderLobby();
   });
@@ -150,6 +215,9 @@
     state.view = payload.view || null;
     if (state.view && state.view.roomId) state.roomId = state.view.roomId;
     saveSession();
+    // Server has confirmed our seat — open the gate and flush any user
+    // actions that queued during a reconnect.
+    openGate();
     if (state.view && state.view.phase && state.view.phase !== 'waiting') {
       setScreen('table');
       safeRender(renderTable);
@@ -186,8 +254,20 @@
       state.roomId = null;
       state.yourSeat = null;
       state.view = null;
+      // Resume failed — open the gate so the user can Create/Join fresh.
+      openGate();
       setScreen('landing');
       toast('Session expired — create a new room');
+      return;
+    }
+    // "no room" on a connected socket means server lost our binding. This
+    // is exactly the race the emit gate is supposed to prevent; if we see
+    // it anyway (stale buffered event), trigger a resume rather than
+    // bubbling the error to the user.
+    if (reason === 'no room' && loadSession()) {
+      closeGate();
+      const sess = loadSession();
+      socket.emit('resume', { roomId: sess.roomId, name: sess.name });
       return;
     }
     if (state.startPending) resetStartButton();
@@ -220,9 +300,9 @@
     const btn = e.currentTarget;
     btn.disabled = true;
     btn.textContent = 'Starting...';
-    socket.emit('startGame');
-    // Failsafe: if no view/error arrives within 4s, re-enable the button.
-    setTimeout(() => { if (state.startPending) resetStartButton(); }, 4000);
+    gatedEmit('startGame');
+    // Failsafe: if no view/error arrives within 6s, re-enable the button.
+    setTimeout(() => { if (state.startPending) resetStartButton(); }, 6000);
   });
 
   function renderLobby() {
@@ -261,10 +341,10 @@
         btn.className = 'btn seat-ai-toggle';
         if (s && s.isAI) {
           btn.textContent = 'Remove AI';
-          btn.addEventListener('click', () => socket.emit('removeAI', { seat: i }));
+          btn.addEventListener('click', () => gatedEmit('removeAI', { seat: i }));
         } else if (!s) {
           btn.textContent = 'Add AI';
-          btn.addEventListener('click', () => socket.emit('addAI', { seat: i }));
+          btn.addEventListener('click', () => gatedEmit('addAI', { seat: i }));
         } else {
           btn.textContent = '';
           btn.style.visibility = 'hidden';
@@ -448,7 +528,7 @@
       // pickTrump legality: any of your 4/8 cards (legalIds already contains them)
       const ids = legalCardIdsFromView(v);
       if (!ids.has(card.id)) { toast('Not your turn'); return; }
-      socket.emit('action', { type: 'pickTrump', cardId: card.id });
+      gatedEmit('action', { type: 'pickTrump', cardId: card.id });
       return;
     }
     if (phase === 'play') {
@@ -456,7 +536,7 @@
       // faceDown: if we cannot follow suit AND game is closed, server likely
       // expects face-down. We compute as suggestion — server is authoritative.
       const faceDown = shouldPlayFaceDown(v, card);
-      socket.emit('action', { type: 'playCard', cardId: card.id, faceDown });
+      gatedEmit('action', { type: 'playCard', cardId: card.id, faceDown });
       return;
     }
     // Otherwise ignore tap
@@ -599,7 +679,7 @@
   }
 
   function emitAction(payload) {
-    socket.emit('action', payload);
+    gatedEmit('action', payload);
   }
 
   function renderLog(entries) {
