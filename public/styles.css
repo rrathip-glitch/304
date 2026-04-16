@@ -127,6 +127,26 @@ button { cursor: pointer; }
   opacity: 0.7;
 }
 
+.conn-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  background: #b36b00;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 6px 10px;
+  transform: translateY(-100%);
+  transition: transform 200ms ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.conn-banner.visible { transform: translateY(0); }
+
 /* ============ Buttons ============ */
 .btn {
   display: block;
