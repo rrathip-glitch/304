@@ -102,6 +102,9 @@ function startHand(state, rng = Math.random) {
   s.trickPoints = [0, 0];
   s.tricksPlayed = 0;
   s.lastTrick = null;
+  delete s._indicatorPlayed;
+  delete s._trumpsPlayed;
+  delete s._remainingDeck;
 
   // Deal first 4 cards to each seat, CCW starting from dealer's right.
   const deck = shuffle(makeDeck(), rng);
@@ -144,6 +147,9 @@ function legalActions(state, seat) {
     }
     case 'inspect':
       return seat === state.trumpMaker ? [{ type: 'continue' }] : [];
+    case 'hand_end':
+      return [{ type: 'continue' }];
+    case 'game_over':
     default: return [];
   }
 }
@@ -220,15 +226,16 @@ function legalBid4Actions(state, seat) {
 // applyAction
 // --------------------------------------------------------------------------
 
-function applyAction(state, seat, action) {
+function applyAction(state, seat, action, opts = {}) {
   switch (state.phase) {
-    case 'bid4': return applyBid4(state, seat, action);
+    case 'bid4': return applyBid4(state, seat, action, opts);
     case 'trump_pick1': return applyTrumpPick(state, seat, action, /*afterBid8*/ false);
     case 'bid8': return applyBid8(state, seat, action);
     case 'trump_pick2': return applyTrumpPick(state, seat, action, /*afterBid8*/ true);
     case 'open_choice': return applyOpenChoice(state, seat, action);
     case 'play': return applyPlay(state, seat, action);
     case 'inspect': return applyInspect(state, seat, action);
+    case 'hand_end': return applyHandEnd(state, seat, action, opts);
     default:
       throw new Error(`applyAction: phase ${state.phase} not implemented`);
   }
@@ -394,36 +401,33 @@ function enterPlay(s) {
 // --- play -----------------------------------------------------------------
 
 // Returns the array of card IDs the seat may legally play right now.
+// The trump indicator is held outside the maker's `hand` while closed and is
+// ONLY a legal play when: (a) trick 8, hand empty → forced lead; or
+// (b) maker can't follow suit → may be chosen as a face-down cut.
 function legalPlayIds(state, seat) {
   const hand = state.hands[seat];
   const isMaker = seat === state.trumpMaker;
   const indicatorAvail =
     isMaker && !state.trumpRevealed && state.trumpIndicator && !state._indicatorPlayed;
-  const effective = indicatorAvail ? hand.concat([state.trumpIndicator]) : hand;
   const leading = state.currentTrick.length === 0;
 
   if (leading) {
-    let candidates = effective.slice();
-    // Trump indicator cannot be led except in trick 8 (when maker only has it).
-    if (indicatorAvail) {
-      const isTrick8 = state.tricksPlayed === 7;
-      if (!isTrick8) {
-        candidates = candidates.filter((c) => c.id !== state.trumpIndicator.id);
-      }
+    // Forced indicator lead: trick 8, maker's hand empty.
+    if (indicatorAvail && state.tricksPlayed === 7 && hand.length === 0) {
+      return [state.trumpIndicator.id];
     }
+    let candidates = hand.slice();
     // First-trick lead restriction for trump maker in closed: no trump lead.
     if (isMaker && !state.isOpenTrump && !state.trumpRevealed && state.tricksPlayed === 0) {
       const nonTrump = candidates.filter((c) => c.suit !== state.trumpSuit);
       if (nonTrump.length > 0) candidates = nonTrump;
     }
-    // Exhausted-trumps rule (only meaningful once trump is revealed and
-    // opponents are known to hold zero trumps).
+    // Exhausted-trumps rule (only meaningful once trump is revealed).
     if (isMaker && state.trumpRevealed) {
-      const totalTrumpsPlayed = countTrumpsPlayed(state);
-      const opponentsTrumps = 8 /*per suit*/ - totalTrumpsPlayed - hand.filter((c) => c.suit === state.trumpSuit).length;
-      if (opponentsTrumps === 0) {
-        const makerTrumps = candidates.filter((c) => c.suit === state.trumpSuit);
-        if (makerTrumps.length > 0) candidates = makerTrumps;
+      const played = state._trumpsPlayed || 0;
+      const makerTrumps = hand.filter((c) => c.suit === state.trumpSuit).length;
+      if (8 - played - makerTrumps === 0 && makerTrumps > 0) {
+        candidates = candidates.filter((c) => c.suit === state.trumpSuit);
       }
     }
     return candidates.map((c) => c.id);
@@ -431,10 +435,13 @@ function legalPlayIds(state, seat) {
 
   // Following.
   const lead = state.currentTrick[0].card.suit;
-  const follow = effective.filter((c) => c.suit === lead);
+  const follow = hand.filter((c) => c.suit === lead);
   if (follow.length > 0) return follow.map((c) => c.id);
-  // Can't follow: any card (face-up in open, face-down in closed — handled on apply).
-  return effective.map((c) => c.id);
+  // Can't follow: any non-indicator card; maker may additionally choose
+  // the indicator as a face-down cut.
+  const pool = hand.slice();
+  if (indicatorAvail) pool.push(state.trumpIndicator);
+  return pool.map((c) => c.id);
 }
 
 function countTrumpsPlayed(state) {
@@ -477,6 +484,8 @@ function applyPlay(state, seat, action) {
   // Trump maker leading the indicator on trick 8 → face-up reveal.
   if (leading && isIndicator) {
     faceDown = false;
+    s.trumpRevealed = true;
+    s.isOpenTrump = true;
   }
 
   s.currentTrick.push({ seat, card, faceDown, isTrumpIndicator: isIndicator });
@@ -586,12 +595,61 @@ function finalizeTrick(s, revealedNow) {
 function enterHandEnd(s) {
   s.phase = 'hand_end';
   s.currentPlayer = null;
-  s.message = `Hand ${s.handNumber} complete: points ${s.trickPoints.join('/')}, tricks ${s.tricksWon.join('/')}`;
+  const makerTeam = teamOf(s.trumpMaker);
+  const otherTeam = 1 - makerTeam;
+  const bid = s.highBid.amount;
+  const makerPoints = s.trickPoints[makerTeam];
+  const allTricks = s.tricksWon[makerTeam] === 8;
+  let delta;
+  let success;
+  if (allTricks) {
+    // House rule "high court": all 8 tricks → 5 tokens regardless of bid.
+    delta = 5;
+    success = true;
+  } else {
+    success = makerPoints >= bid; // ties go to bidder
+    if (s.highBid.isCloseCaps) {
+      delta = success ? 4 : 5; // PCC
+    } else if (bid < 200) {
+      delta = success ? 1 : 2;
+    } else if (bid < 250) {
+      delta = success ? 2 : 3;
+    } else {
+      delta = success ? 3 : 4; // 250+
+    }
+  }
+  const winnerTeam = success ? makerTeam : otherTeam;
+  const loserTeam = 1 - winnerTeam;
+  const transfer = Math.min(delta, s.tokens[loserTeam]);
+  s.tokens[loserTeam] -= transfer;
+  s.tokens[winnerTeam] += transfer;
+
+  const label = allTricks ? 'HIGH COURT (all 8 tricks)' : (success ? 'succeeds' : 'fails');
+  s.message =
+    `Hand ${s.handNumber}: bid ${bid} ${label}, maker points ${makerPoints}, ` +
+    `tokens ${s.tokens.join('/')}`;
   s.log = appendLog(s.log, s.message);
+
+  if (s.tokens[0] === 0 || s.tokens[1] === 0) {
+    s.phase = 'game_over';
+    const winner = s.tokens[0] === 0 ? 1 : 0;
+    s.message = `Team ${winner} wins the match (${s.tokens[winner]}/${MAX_TOKENS} tokens)`;
+    s.log = appendLog(s.log, s.message);
+  }
   return s;
 }
 
-function applyBid4(state, seat, action) {
+// --- hand_end → next hand -------------------------------------------------
+
+function applyHandEnd(state, seat, action, opts = {}) {
+  if (action.type !== 'continue') throw new Error('applyHandEnd: expected continue');
+  if (state.phase === 'game_over') throw new Error('applyHandEnd: game over');
+  const s = structuredClone(state);
+  s.dealer = next(s.dealer);
+  return startHand(s, opts.rng);
+}
+
+function applyBid4(state, seat, action, opts = {}) {
   if (seat !== state.currentBidder) throw new Error('applyBid4: not your turn');
   const s = structuredClone(state);
 
@@ -649,7 +707,7 @@ function applyBid4(state, seat, action) {
       s.message = `Seat ${seat} demands redeal (hand = ${handPoints(s.hands[seat])} internal)`;
       s.log = appendLog(s.log, s.message);
       // Same dealer redeals — redrive startHand with same dealer.
-      const redealt = startHand({ ...s, dealer: s.dealer, handNumber: s.handNumber - 1 });
+      const redealt = startHand({ ...s, dealer: s.dealer, handNumber: s.handNumber - 1 }, opts.rng);
       return redealt;
     }
     default:
@@ -660,7 +718,7 @@ function applyBid4(state, seat, action) {
   s.currentBidder = nextActiveBidder(s, seat);
 
   // Check for bidding resolution.
-  return maybeResolveBid4(s);
+  return maybeResolveBid4(s, opts);
 }
 
 function nextActiveBidder(state, fromSeat) {
@@ -673,7 +731,7 @@ function nextActiveBidder(state, fromSeat) {
   return null;
 }
 
-function maybeResolveBid4(state) {
+function maybeResolveBid4(state, opts = {}) {
   const s = state;
   const passes = s.passedSeats.length;
 
@@ -683,7 +741,7 @@ function maybeResolveBid4(state) {
     s.log = appendLog(s.log, s.message);
     s.dealer = next(s.dealer);
     // Redeal with new dealer. Preserve tokens and game state.
-    return startHand({ ...s, handNumber: s.handNumber - 1 });
+    return startHand({ ...s, handNumber: s.handNumber - 1 }, opts.rng);
   }
 
   // Three passes and a high bid → bidder wins.
