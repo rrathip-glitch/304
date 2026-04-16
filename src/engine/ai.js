@@ -223,7 +223,12 @@ function chooseOpenChoice(state, seat) {
 // --- play ------------------------------------------------------------------
 
 function choosePlayCard(state, seat, cardIds) {
-  const hand = state.hands[seat].filter((c) => cardIds.includes(c.id));
+  // Include the trump indicator (held separately) if it's legal this turn.
+  const sources = state.hands[seat].slice();
+  if (!state.isOpenTrump && state.trumpMaker === seat && state.trumpIndicator && cardIds.includes(state.trumpIndicator.id)) {
+    sources.push(state.trumpIndicator);
+  }
+  const hand = sources.filter((c) => cardIds.includes(c.id));
   if (!hand.length) return null;
 
   const trump = (state.isOpenTrump || state.trumpRevealed) ? state.trumpSuit : null;

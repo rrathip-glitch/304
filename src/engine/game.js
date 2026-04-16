@@ -228,18 +228,23 @@ function handleBid4(state, seat, action) {
 
 function advanceBid4(state) {
   const activeBidders = [0, 1, 2, 3].filter((s) => !state.passedSeats.includes(s));
-  if (state.highBid && activeBidders.length === 1 && activeBidders[0] === state.highBid.bidder) {
-    return enterTrumpPick1(state);
+  // If a high bid exists and no other active bidders could raise, the bid wins.
+  if (state.highBid) {
+    const contenders = activeBidders.filter((s) => s !== state.highBid.bidder);
+    if (contenders.length === 0) return enterTrumpPick1(state);
   }
-  const allPassed = state.passedSeats.length === 4 && !state.highBid;
-  if (allPassed) {
+  // All four passed without any bid → redeal.
+  if (!state.highBid && state.passedSeats.length === 4) {
     log(state, 'All passed. Redealing.');
     state.dealer = next(state.dealer);
     startHand(state);
     return { ok: true };
   }
+  // Advance to next seat not yet passed; if high bidder themselves passed,
+  // the loop above already transitioned. Defensive cap prevents any accidental
+  // infinite loop.
   let p = next(state.currentBidder);
-  while (state.passedSeats.includes(p)) p = next(p);
+  for (let i = 0; i < 4 && state.passedSeats.includes(p); i++) p = next(p);
   state.currentBidder = p;
   return { ok: true };
 }
@@ -358,17 +363,34 @@ function handlePlay(state, seat, action) {
   if (seat !== state.currentPlayer) return fail('not your turn');
   if (action.type !== 'playCard') return fail('expected playCard');
   const hand = state.hands[seat];
-  const idx = hand.findIndex((c) => c.id === action.cardId);
-  if (idx < 0) return fail('card not in hand');
-  const card = hand[idx];
 
-  const isIndicator = !state.isOpenTrump && state.trumpMaker === seat && state.trumpIndicator && state.trumpIndicator.id === card.id;
+  // Support playing the trump indicator even when it's held outside the hand.
+  const hasIndicator = !state.isOpenTrump && state.trumpMaker === seat && !!state.trumpIndicator;
+  let idx = hand.findIndex((c) => c.id === action.cardId);
+  let card;
+  let isIndicator = false;
+  if (idx < 0) {
+    if (hasIndicator && state.trumpIndicator.id === action.cardId) {
+      card = state.trumpIndicator;
+      isIndicator = true;
+      idx = -1;
+    } else {
+      return fail('card not in hand');
+    }
+  } else {
+    card = hand[idx];
+    isIndicator = hasIndicator && state.trumpIndicator.id === card.id;
+  }
   const leadCard = state.currentTrick[0] && state.currentTrick[0].card;
   const leadSuit = leadCard ? (state.currentTrick[0].faceDown && !state.currentTrick[0].isTrumpIndicator ? null : leadCard.suit) : null;
   const isLead = state.currentTrick.length === 0;
 
   if (isLead) {
-    if (isIndicator && !(state.tricksPlayed === 7 && hand.length === 1)) {
+    // Indicator is held outside hand; legal to lead it only in trick 8 when
+    // it is the player's only remaining card.
+    const onlyCardIsIndicator = hand.length === 0 && hasIndicator;
+    const traditionalSoloCase = hand.length === 1 && isIndicator;
+    if (isIndicator && !(state.tricksPlayed === 7 && (onlyCardIsIndicator || traditionalSoloCase))) {
       return fail('cannot lead the trump indicator');
     }
     if (!state.isOpenTrump && state.tricksPlayed === 0 && seat === state.trumpMaker && seat === next(state.dealer)) {
@@ -395,7 +417,7 @@ function handlePlay(state, seat, action) {
     }
   }
 
-  hand.splice(idx, 1);
+  if (idx >= 0) hand.splice(idx, 1);
   if (isIndicator) {
     state.trumpIndicator = null;
   }
@@ -583,13 +605,19 @@ function legalActions(state, seat) {
 function legalCardIds(state, seat) {
   const hand = state.hands[seat];
   const isLead = state.currentTrick.length === 0;
-  const indicatorId = !state.isOpenTrump && state.trumpMaker === seat && state.trumpIndicator ? state.trumpIndicator.id : null;
+  const hasIndicator = !state.isOpenTrump && state.trumpMaker === seat && !!state.trumpIndicator;
+  const indicatorId = hasIndicator ? state.trumpIndicator.id : null;
+  // If hand is empty and we are the trump maker with only the indicator left,
+  // the indicator is the only legal card (this is the 8th trick case).
+  if ((!hand || hand.length === 0) && hasIndicator) return [indicatorId];
+  if (!hand || hand.length === 0) return [];
 
   if (isLead) {
-    const out = [];
+    // Primary filter: indicator restriction + first-trick no-trump + exhausted-trump
+    const strict = [];
     for (const c of hand) {
       if (c.id === indicatorId) {
-        if (state.tricksPlayed === 7 && hand.length === 1) out.push(c.id);
+        if (state.tricksPlayed === 7 && hand.length === 1) strict.push(c.id);
         continue;
       }
       if (!state.isOpenTrump && state.tricksPlayed === 0 && seat === state.trumpMaker && seat === next(state.dealer) && c.suit === state.trumpSuit) {
@@ -598,9 +626,15 @@ function legalCardIds(state, seat) {
       if ((state.isOpenTrump || state.trumpRevealed) && exhaustedTrumpCheck(state, seat, c)) {
         continue;
       }
-      out.push(c.id);
+      strict.push(c.id);
     }
-    return out;
+    if (strict.length > 0) return strict;
+    // Fallback 1: relax first-trick-no-trump (trump maker's hand is all trumps —
+    // edge case; allow a trump lead rather than deadlock).
+    const relaxed1 = hand.filter((c) => c.id !== indicatorId).map((c) => c.id);
+    if (relaxed1.length > 0) return relaxed1;
+    // Fallback 2: only the indicator remains — allow it (typical at trick 8).
+    return hand.map((c) => c.id);
   }
   const first = state.currentTrick[0];
   const leadSuit = first.faceDown && !first.isTrumpIndicator ? null : first.card.suit;
@@ -608,6 +642,9 @@ function legalCardIds(state, seat) {
   if (following) {
     return hand.filter((c) => c.suit === leadSuit && c.id !== indicatorId).map((c) => c.id);
   }
+  // Can't follow suit: any card (indicator excluded unless it's the only card / trick 8).
+  const nonIndicator = hand.filter((c) => c.id !== indicatorId).map((c) => c.id);
+  if (nonIndicator.length > 0) return nonIndicator;
   return hand.map((c) => c.id);
 }
 
