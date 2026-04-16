@@ -377,6 +377,10 @@ button { cursor: pointer; }
 .your-hand {
   display: flex;
   flex-direction: row;
+  /* `safe center` centers the hand when it fits, but falls back to
+   * left-align when cards overflow — prevents the left-most cards from
+   * being scrolled off-screen (the failure mode of plain `center`). */
+  justify-content: safe center;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 10px 8px;
@@ -391,6 +395,28 @@ button { cursor: pointer; }
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 .your-hand .card:first-child { margin-left: 0; }
+
+/* Trump indicator shown only to the trump maker — their 8th card is held
+ * face-down as the indicator, not in the hand. Without this row the user
+ * has no way to see which suit they picked. */
+.your-trump {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 8px 0;
+  min-height: 0;
+}
+.your-trump:empty { display: none; }
+.your-trump .your-trump-label {
+  font-size: 11px;
+  color: var(--cream-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.your-trump .card {
+  box-shadow: 0 0 0 2px var(--gold), var(--shadow);
+}
 
 /* ============ Card DOM ============ */
 .card {

@@ -53,7 +53,7 @@ app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 app.get('/health', (_req, res) => res.status(200).type('text/plain').send('ok'));
-app.get('/version', (_req, res) => res.json({ build: 'landing-clip-4', startedAt: new Date(SERVER_STARTED_AT).toISOString() }));
+app.get('/version', (_req, res) => res.json({ build: 'hand-center-5', startedAt: new Date(SERVER_STARTED_AT).toISOString() }));
 
 // roomId -> { code, state, sockets: Map<seat, socketId|null>, aiQueue: [] }
 const rooms = new Map();

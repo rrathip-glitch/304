@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="theme-color" content="#0d4a2b">
   <title>304 — card game</title>
-  <link rel="stylesheet" href="styles.css?v=landing-clip-4">
+  <link rel="stylesheet" href="styles.css?v=hand-center-5">
 </head>
 <body>
   <div id="app" class="screen-landing">
@@ -32,7 +32,7 @@
           <input id="code-input" type="text" maxlength="6" autocomplete="off" placeholder="ABC123" />
         </label>
         <button id="join-btn" class="btn">Join room</button>
-        <div class="build-marker" id="build-marker">build: landing-clip-4 (tap)</div>
+        <div class="build-marker" id="build-marker">build: hand-center-5 (tap)</div>
       </div>
     </section>
 
@@ -109,6 +109,7 @@
       <!-- Your hand (bottom) -->
       <div class="seat-slot seat-bottom" id="seat-bottom">
         <div class="seat-name you"></div>
+        <div class="your-trump" id="your-trump"></div>
         <div class="your-hand" id="your-hand"></div>
       </div>
 
@@ -128,7 +129,7 @@
 
   <!-- Debug overlay: tap the build marker to toggle. Off by default. -->
   <div id="debug-overlay" class="debug-overlay hidden">
-    <div class="debug-row">build: <b id="dbg-build">landing-clip-4</b></div>
+    <div class="debug-row">build: <b id="dbg-build">hand-center-5</b></div>
     <div class="debug-row">socket: <b id="dbg-sock">-</b></div>
     <div class="debug-row">gate: <b id="dbg-gate">-</b></div>
     <div class="debug-row">queued: <b id="dbg-pending">0</b></div>
@@ -138,7 +139,7 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="cards.js?v=landing-clip-4"></script>
-  <script src="client.js?v=landing-clip-4"></script>
+  <script src="cards.js?v=hand-center-5"></script>
+  <script src="client.js?v=hand-center-5"></script>
 </body>
 </html>

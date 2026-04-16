@@ -17,7 +17,7 @@
   };
 
   // ---- Build stamp & debug overlay -----------------------------------------
-  const BUILD = 'landing-clip-4';
+  const BUILD = 'hand-center-5';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -549,7 +549,26 @@
     const el = $('#seat-bottom');
     el.querySelector('.seat-name').textContent = nameOfSeat(state.yourSeat) + ' (you)';
     el.querySelector('.seat-name').classList.toggle('active', v.currentPlayer === state.yourSeat);
+    renderYourTrump(v);
     renderHand(v.yourHand || [], legalCardIdsFromView(v));
+  }
+
+  // Render the trump indicator card to the trump maker so they can see
+  // which card they picked. The server only sends `trumpIndicator` in the
+  // view if the recipient is the trump maker (or it's already been
+  // revealed), so we don't need extra client-side gating.
+  function renderYourTrump(v) {
+    const el = $('#your-trump');
+    if (!el) return;
+    el.innerHTML = '';
+    if (!v || !v.trumpIndicator) return;
+    if (v.trumpMaker !== state.yourSeat) return;
+    const label = document.createElement('span');
+    label.className = 'your-trump-label';
+    label.textContent = v.trumpRevealed ? 'Trump (open)' : 'Your trump';
+    el.appendChild(label);
+    const cardEl = Cards.render(v.trumpIndicator, { small: true });
+    el.appendChild(cardEl);
   }
 
   function legalCardIdsFromView(v) {
