@@ -17,7 +17,7 @@
   };
 
   // ---- Build stamp & debug overlay -----------------------------------------
-  const BUILD = 'emit-gate-3';
+  const BUILD = 'landing-clip-4';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {

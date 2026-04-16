@@ -78,13 +78,21 @@ button { cursor: pointer; }
 .toast.hidden { opacity: 0; pointer-events: none; }
 
 /* ============ Landing ============ */
+/* Specificity trap: #landing's display MUST be gated on .active. Without
+ * `.screen.active`, the ID-level `display: flex` here beat the class-level
+ * `.screen { display: none }` rule, so #landing rendered on EVERY screen.
+ * With `#app.screen-table { overflow: hidden; height: 100vh }` that meant
+ * the landing card clipped the table out of view — producing the "Start
+ * Game loops to landing" bug. Keep the layout properties at the ID level
+ * but put display under .active.
+ */
 #landing {
   min-height: 100vh;
-  display: flex;
   align-items: center;
   justify-content: center;
   background: radial-gradient(ellipse at center, var(--felt) 0%, var(--felt-dark) 70%);
 }
+#landing.active { display: flex; }
 .landing-card {
   width: 100%;
   max-width: 340px;
