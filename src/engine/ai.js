@@ -223,7 +223,11 @@ function chooseOpenChoice(state, seat) {
 // --- play ------------------------------------------------------------------
 
 function choosePlayCard(state, seat, cardIds) {
-  const hand = state.hands[seat].filter((c) => cardIds.includes(c.id));
+  const pool = state.hands[seat].slice();
+  if (state.trumpIndicator && !state.isOpenTrump && seat === state.trumpMaker) {
+    pool.push(state.trumpIndicator);
+  }
+  const hand = pool.filter((c) => cardIds.includes(c.id));
   if (!hand.length) return null;
 
   const trump = (state.isOpenTrump || state.trumpRevealed) ? state.trumpSuit : null;

@@ -358,17 +358,27 @@ function handlePlay(state, seat, action) {
   if (seat !== state.currentPlayer) return fail('not your turn');
   if (action.type !== 'playCard') return fail('expected playCard');
   const hand = state.hands[seat];
-  const idx = hand.findIndex((c) => c.id === action.cardId);
-  if (idx < 0) return fail('card not in hand');
-  const card = hand[idx];
+  const indicatorHeld = !state.isOpenTrump && state.trumpMaker === seat && state.trumpIndicator;
+  const isIndicator = indicatorHeld && state.trumpIndicator.id === action.cardId;
 
-  const isIndicator = !state.isOpenTrump && state.trumpMaker === seat && state.trumpIndicator && state.trumpIndicator.id === card.id;
+  let card, idx;
+  if (isIndicator) {
+    card = state.trumpIndicator;
+    idx = -1;
+  } else {
+    idx = hand.findIndex((c) => c.id === action.cardId);
+    if (idx < 0) return fail('card not in hand');
+    card = hand[idx];
+  }
+
   const leadCard = state.currentTrick[0] && state.currentTrick[0].card;
   const leadSuit = leadCard ? (state.currentTrick[0].faceDown && !state.currentTrick[0].isTrumpIndicator ? null : leadCard.suit) : null;
   const isLead = state.currentTrick.length === 0;
+  const lastTrick = state.tricksPlayed === 7;
+  const onlyIndicatorLeft = indicatorHeld && hand.length === 0;
 
   if (isLead) {
-    if (isIndicator && !(state.tricksPlayed === 7 && hand.length === 1)) {
+    if (isIndicator && !(lastTrick && onlyIndicatorLeft)) {
       return fail('cannot lead the trump indicator');
     }
     if (!state.isOpenTrump && state.tricksPlayed === 0 && seat === state.trumpMaker && seat === next(state.dealer)) {
@@ -381,23 +391,27 @@ function handlePlay(state, seat, action) {
       if (exhausted) return fail(exhausted);
     }
   } else {
-    const following = hand.some((c) => c.suit === leadSuit && !(!state.isOpenTrump && c === state.trumpIndicator));
-    if (following && card.suit !== leadSuit) {
-      return fail('must follow suit');
-    }
-    if (!following && !state.isOpenTrump) {
-      if (!isIndicator) {
-        const nonIndicatorExists = hand.some((c, i) => i !== idx && !(state.trumpMaker === seat && state.trumpIndicator && c.id === state.trumpIndicator.id));
-        if (!action.faceDown && nonIndicatorExists) {
-          action.faceDown = true;
-        }
+    const following = hand.some((c) => c.suit === leadSuit);
+    if (isIndicator) {
+      if (following) return fail('must follow suit');
+      if (!lastTrick && leadSuit === state.trumpSuit) {
+        return fail('indicator can only cut non-trump leads');
+      }
+      action.faceDown = true;
+    } else {
+      if (following && card.suit !== leadSuit) {
+        return fail('must follow suit');
+      }
+      if (!following && !state.isOpenTrump && !action.faceDown) {
+        action.faceDown = true;
       }
     }
   }
 
-  hand.splice(idx, 1);
   if (isIndicator) {
     state.trumpIndicator = null;
+  } else {
+    hand.splice(idx, 1);
   }
   const played = {
     seat,
@@ -583,15 +597,14 @@ function legalActions(state, seat) {
 function legalCardIds(state, seat) {
   const hand = state.hands[seat];
   const isLead = state.currentTrick.length === 0;
-  const indicatorId = !state.isOpenTrump && state.trumpMaker === seat && state.trumpIndicator ? state.trumpIndicator.id : null;
+  const indicatorHeld = !state.isOpenTrump && state.trumpMaker === seat && state.trumpIndicator;
+  const indicatorId = indicatorHeld ? state.trumpIndicator.id : null;
+  const lastTrick = state.tricksPlayed === 7;
+  const onlyIndicatorLeft = indicatorHeld && hand.length === 0;
 
   if (isLead) {
     const out = [];
     for (const c of hand) {
-      if (c.id === indicatorId) {
-        if (state.tricksPlayed === 7 && hand.length === 1) out.push(c.id);
-        continue;
-      }
       if (!state.isOpenTrump && state.tricksPlayed === 0 && seat === state.trumpMaker && seat === next(state.dealer) && c.suit === state.trumpSuit) {
         continue;
       }
@@ -600,15 +613,21 @@ function legalCardIds(state, seat) {
       }
       out.push(c.id);
     }
+    if (indicatorHeld && lastTrick && onlyIndicatorLeft) out.push(indicatorId);
     return out;
   }
+
   const first = state.currentTrick[0];
   const leadSuit = first.faceDown && !first.isTrumpIndicator ? null : first.card.suit;
-  const following = hand.some((c) => c.suit === leadSuit && c.id !== indicatorId);
+  const following = hand.some((c) => c.suit === leadSuit);
   if (following) {
-    return hand.filter((c) => c.suit === leadSuit && c.id !== indicatorId).map((c) => c.id);
+    return hand.filter((c) => c.suit === leadSuit).map((c) => c.id);
   }
-  return hand.map((c) => c.id);
+  const out = hand.map((c) => c.id);
+  if (indicatorHeld && (onlyIndicatorLeft || (leadSuit && leadSuit !== state.trumpSuit))) {
+    out.push(indicatorId);
+  }
+  return out;
 }
 
 function viewFor(state, seat) {
