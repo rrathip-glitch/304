@@ -125,3 +125,73 @@ within that round.
 
 *Append new entries below this line. Do not modify prior entries — if a
 decision is reversed, add a new entry that references and supersedes it.*
+
+---
+
+## 2026-04-16 — Client renders purely from server `view`; no local game state
+
+**Decision:** The frontend (`public/client.js`) never computes legal moves,
+scores, or phase transitions. It reads `view.legalActions`, `view.phase`,
+`view.currentPlayer`, etc., and renders. Card taps emit an `action` and
+wait for a new `view` broadcast.
+
+**Alternatives:** Mirror engine state client-side for snappier UI / optimistic
+updates.
+
+**Rationale:** Server is authoritative (per SOUL §3). Duplicating rule logic
+doubles the surface area for bugs, especially around closed-trump inspection
+reveals — which the client must NEVER try to infer. Perceived latency over
+Socket.IO on a phone is already low; optimism isn't worth the complexity.
+
+---
+
+## 2026-04-16 — Cards drawn with CSS, no image assets
+
+**Decision:** The card face is a plain `<div class="card red">` with suit
+symbol + rank in two corners and a large suit in the center. No SVGs, no
+spritesheets, no font-awesome.
+
+**Rationale:** Zero network cost, scales to any size via `--w`/`--h` vars,
+readable on 375×812, infinitely themeable later. Matches the "no
+dependencies, novice-readable" principle.
+
+---
+
+## 2026-04-16 — Seat-slot mapping is relative to the viewer
+
+**Decision:** The client always renders the viewer at the bottom of the
+table, their partner at the top, right-opponent on the right, left-opponent
+on the left. Mapping:
+  `me = yourSeat`
+  `right = (yourSeat + 3) % 4`  (counter-clockwise = next player)
+  `partner = (yourSeat + 2) % 4`
+  `left = (yourSeat + 1) % 4`
+
+**Rationale:** Everyone expects to be at the bottom of their own screen.
+Keeps absolute seat indices on the server; the client never mutates them.
+
+---
+
+## 2026-04-16 — Bid UI: chips + custom entry + rare-badge
+
+**Decision:** Bid amounts come from `view.legalActions[0].amounts` (server
+decides). The client renders each as a chip; 190 is styled with a `.rare`
+class (lower opacity) so the UI nudges away from it without hiding it. A
+numeric "Other" input exists for edge cases. PCC (Partner Close Caps) shows
+only when the server includes `canCloseCaps: true`.
+
+**Rationale:** Keeps the legal-bid set server-authoritative while still
+encoding the household convention (190 rare) visually. The "Other" input
+respects user autonomy on rare amounts.
+
+---
+
+## 2026-04-16 — Resume via `sessionStorage.roomId` + URL `?room=`
+
+**Decision:** On socket connect, the client auto-emits `resume { roomId,
+name }` if it has both a stored room and a stored name. The invite link
+carries `?room=CODE` so a tap-to-join works with zero typing.
+
+**Rationale:** The novice-user flow is "dad taps link → plays". Pre-filling
+from the URL and resuming after a brief disconnect is the minimum viable
+"seamless" experience.

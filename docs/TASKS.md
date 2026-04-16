@@ -9,6 +9,13 @@
 - [x] Documentation suite (SOUL, RULES, ARCHITECTURE, API, TASKS, DECISIONS)
 - [x] `src/engine/cards.js` — deck, ranks, points (integer ×10 internal),
       compare, winningIndex, legalCards, displayPoints
+- [x] `public/index.html` — landing, lobby, table shells (sub-agent
+      `claude/sub-agent-soul-goals-5CCGd`)
+- [x] `public/styles.css` — mobile-first, 375×812 target, CSS-drawn cards,
+      dark felt theme
+- [x] `public/cards.js` — DOM helpers: card element, back, facedown, sortHand
+- [x] `public/client.js` — Socket.IO binding, view renderer, action bar,
+      lobby/table dispatch, share-link + resume handling
 
 ## Next up
 
@@ -33,11 +40,38 @@
    - Express static file serving for `public/`.
    - Socket.IO room manager per `docs/API.md`.
    - Scheduled AI ticks with 600–1200ms delay for natural pacing.
-4. Build `public/index.html`, `public/styles.css`, `public/client.js`,
-   `public/cards.js`:
-   - Landing: create room / join room.
-   - Lobby: seat assignment, share link.
-   - Game table: mobile-first, cards bottom, trick center, partner top.
+4. ~~Build `public/*`~~ — done on sub-agent branch
+   `claude/sub-agent-soul-goals-5CCGd`. Integration notes below.
+
+### Frontend ↔ backend contract (as built)
+
+The client expects the server `view` to include, at minimum:
+   - `roomId`, `yourSeat`, `phase`, `currentPlayer`, `dealer`
+   - `seats[4]` as `{ name, isAI, empty? }`
+   - `tokens[2]`, `tricksWon[2]`
+   - `yourHand[]` of `{ suit, rank, id }`
+   - `handCounts[4]` (opponent card counts)
+   - `trumpSuit`, `trumpIndicator` (null unless you are trump maker or it's
+     been revealed)
+   - `highBid` as `{ amount, bidder, isCloseCaps }` or null
+   - `currentTrick[]` of `{ seat, card?, faceDown, hidden, isTrumpIndicator,
+     revealed? }`. Set `hidden: true` for cards the current viewer is not
+     permitted to see; when the trick is awarded and a reveal happens, send
+     `revealed: true` and include `card`.
+   - `legalActions[]` — the client renders chips/buttons from this:
+     - `bid` supports `{ amounts:[...], min, canCloseCaps? }`
+     - `playCard` supports `{ cardIds:[...], faceDownRequired? }`
+     - `pickTrump` supports `{ cardIds:[...] }`
+     - `pass`, `askPartner`, `demandRedeal`, `declareOpen`, `declareClosed`,
+       `continue` have no payload
+   - `handResult` (only during `phase === 'hand_end'`):
+     `{ trumpMaker, trumpMakerTeam, bidAmount, isCloseCaps, makerPoints,
+        succeeded, highCourt }`
+   - `log[]` of strings (client shows last 20 in the drawer)
+
+The client emits exactly the events documented in `docs/API.md`:
+`createRoom`, `joinRoom`, `setSeat`, `addAI`, `removeAI`, `startGame`,
+`action { type, ... }`, `resume`.
 5. Add `Dockerfile` and `railway.json`.
 6. Test flow end-to-end; commit & push.
 
