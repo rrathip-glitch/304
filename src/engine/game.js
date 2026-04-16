@@ -129,8 +129,36 @@ function legalActions(state, seat) {
   if (seat !== state.currentPlayer && seat !== state.currentBidder) return [];
   switch (state.phase) {
     case 'bid4': return legalBid4Actions(state, seat);
+    case 'trump_pick1':
+    case 'trump_pick2':
+      return legalTrumpPickActions(state, seat);
+    case 'bid8': return legalBid8Actions(state, seat);
     default: return [];
   }
+}
+
+function legalTrumpPickActions(state, seat) {
+  if (seat !== state.currentPlayer) return [];
+  if (seat !== state.trumpMaker) return [];
+  const cardIds = state.hands[seat].map((c) => c.id);
+  return [{ type: 'pickTrump', cardIds }];
+}
+
+function legalBid8Actions(state, seat) {
+  if (seat !== state.currentBidder) return [];
+  const actions = [];
+  const partnerOfHigh = state.highBid ? partnerOf(state.highBid.bidder) : null;
+  // Forced pass if your partner currently holds the high bid.
+  if (partnerOfHigh === seat) {
+    return [{ type: 'pass' }];
+  }
+  actions.push({ type: 'pass' });
+  const minRaw = Math.max(MIN_BID_8, (state.highBid?.amount ?? 0) + BID_STEP);
+  const amounts = [];
+  // Convention rarely above 260 but engine allows 260 / 270 / 280; AI caps.
+  for (let a = minRaw; a <= 280; a += BID_STEP) amounts.push(a);
+  if (amounts.length) actions.push({ type: 'bid', amounts });
+  return actions;
 }
 
 function legalBid4Actions(state, seat) {
@@ -182,8 +210,137 @@ function legalBid4Actions(state, seat) {
 // --------------------------------------------------------------------------
 
 function applyAction(state, seat, action) {
-  if (state.phase === 'bid4') return applyBid4(state, seat, action);
-  throw new Error(`applyAction: phase ${state.phase} not implemented`);
+  switch (state.phase) {
+    case 'bid4': return applyBid4(state, seat, action);
+    case 'trump_pick1': return applyTrumpPick(state, seat, action, /*afterBid8*/ false);
+    case 'bid8': return applyBid8(state, seat, action);
+    case 'trump_pick2': return applyTrumpPick(state, seat, action, /*afterBid8*/ true);
+    default:
+      throw new Error(`applyAction: phase ${state.phase} not implemented`);
+  }
+}
+
+// --- trump_pick1 / trump_pick2 --------------------------------------------
+
+function applyTrumpPick(state, seat, action, afterBid8) {
+  if (seat !== state.currentPlayer || seat !== state.trumpMaker) {
+    throw new Error('applyTrumpPick: not your turn');
+  }
+  if (action.type !== 'pickTrump') throw new Error('applyTrumpPick: expected pickTrump');
+  const idx = state.hands[seat].findIndex((c) => c.id === action.cardId);
+  if (idx < 0) throw new Error('applyTrumpPick: card not in hand');
+
+  const s = structuredClone(state);
+  const card = s.hands[seat][idx];
+  s.hands[seat].splice(idx, 1);
+  s.trumpIndicator = card;
+  s.trumpSuit = card.suit;
+  s.message = `Seat ${seat} places trump indicator (hidden)`;
+  s.log = appendLog(s.log, s.message);
+
+  if (!afterBid8) {
+    // First pick: deal second batch, then enter bid8.
+    dealSecondBatch(s);
+    enterBid8(s);
+  } else {
+    // Pick after bid8 raise by new maker: proceed to open_choice.
+    enterOpenChoice(s);
+  }
+  return s;
+}
+
+function dealSecondBatch(s) {
+  if (!s._remainingDeck || s._remainingDeck.length !== 16) {
+    throw new Error('dealSecondBatch: expected 16 cards');
+  }
+  let seat = next(s.dealer);
+  for (const card of s._remainingDeck) {
+    s.hands[seat].push(card);
+    seat = next(seat);
+  }
+  delete s._remainingDeck;
+}
+
+function enterBid8(s) {
+  s.phase = 'bid8';
+  s.currentPlayer = null;
+  s.currentBidder = s.trumpMaker;             // current high bidder opens bid8
+  s._bid8Turns = 0;
+  s._bid8Queue = [];
+  let p = s.trumpMaker;
+  for (let i = 0; i < 4; i++) { s._bid8Queue.push(p); p = next(p); }
+  s.message = `Second bid round: seat ${s.currentBidder} opens`;
+  s.log = appendLog(s.log, s.message);
+}
+
+// --- bid8 -----------------------------------------------------------------
+
+function applyBid8(state, seat, action) {
+  if (seat !== state.currentBidder) throw new Error('applyBid8: not your turn');
+  const s = structuredClone(state);
+
+  switch (action.type) {
+    case 'bid': {
+      const partnerIsHigh = s.highBid && partnerOf(s.highBid.bidder) === seat;
+      if (partnerIsHigh) throw new Error('applyBid8: partner holds high, must pass');
+      const amt = action.amount;
+      const minRaw = Math.max(MIN_BID_8, (s.highBid?.amount ?? 0) + BID_STEP);
+      if (!Number.isInteger(amt) || amt % BID_STEP !== 0) {
+        throw new Error('applyBid8: bid must be integer multiple of 10');
+      }
+      if (amt < minRaw) throw new Error(`applyBid8: bid must be ≥ ${minRaw}`);
+      s.highBid = { amount: amt, bidder: seat, isCloseCaps: false };
+      s.bids.push({ seat, type: 'bid', amount: amt, round: 8 });
+      s.message = `Seat ${seat} bids ${amt} (8-card)`;
+      s.log = appendLog(s.log, s.message);
+      break;
+    }
+    case 'pass':
+      s.bids.push({ seat, type: 'pass', round: 8 });
+      s.message = `Seat ${seat} passes (8-card)`;
+      s.log = appendLog(s.log, s.message);
+      break;
+    default:
+      throw new Error(`applyBid8: unknown action ${action.type}`);
+  }
+
+  s._bid8Turns += 1;
+  if (s._bid8Turns < 4) {
+    s.currentBidder = s._bid8Queue[s._bid8Turns];
+    return s;
+  }
+  // All four took their turn; resolve.
+  return resolveBid8(s);
+}
+
+function resolveBid8(s) {
+  delete s._bid8Queue;
+  delete s._bid8Turns;
+  s.currentBidder = null;
+  const newMaker = s.highBid.bidder;
+  if (newMaker === s.trumpMaker) {
+    // Same trump maker, possibly higher bid; go straight to open_choice.
+    enterOpenChoice(s);
+    return s;
+  }
+  // Different player raised: return old indicator, let new maker pick.
+  s.hands[s.trumpMaker].push(s.trumpIndicator);
+  s.trumpIndicator = null;
+  s.trumpSuit = null;
+  s.trumpMaker = newMaker;
+  s.phase = 'trump_pick2';
+  s.currentPlayer = newMaker;
+  s.message = `Seat ${newMaker} takes over as trump maker; picks new indicator`;
+  s.log = appendLog(s.log, s.message);
+  return s;
+}
+
+function enterOpenChoice(s) {
+  s.phase = 'open_choice';
+  s.currentPlayer = s.trumpMaker;
+  s.currentBidder = null;
+  s.message = `Seat ${s.trumpMaker} chooses Open or Closed`;
+  s.log = appendLog(s.log, s.message);
 }
 
 function applyBid4(state, seat, action) {
