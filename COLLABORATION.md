@@ -92,21 +92,34 @@ Scopes: `docs`, `engine`, `ai`, `server`, `client`, `deploy`, `fix`, `style`.
 **Session `0136BhfwMDsMM6tHKFzrc2WJ` (2026-04-16, Claude Opus 4.7)**
 
 Shipped:
-- Docs suite (SOUL, RULES, ARCHITECTURE, API, TASKS, DECISIONS, TESTING, DEPLOYMENT, README).
+- Docs suite (SOUL, RULES, ARCHITECTURE, API, TASKS, DECISIONS, TESTING,
+  DEPLOYMENT, README, COLLABORATION).
 - `src/engine/cards.js` — deck, ranks, points (integer ×10), compare, winningIndex.
+- `src/engine/game.js` — full state machine (merged from parallel-agent branch).
+- `src/engine/ai.js` — bidding + play heuristics (merged).
+- `server.js` — Express + Socket.IO, room manager, view filtering, AI pacing (merged).
+- `public/index.html`, `public/styles.css`, `public/cards.js`,
+  `public/client.js` — mobile-first UI (merged).
+- `Dockerfile`, `railway.json`, `.dockerignore` — Railway deployment.
+- `scripts/smoke.js`, `scripts/soak.js`, `scripts/e2e.js` — regression tests.
 
-In progress:
-- `src/engine/game.js` — state machine.
+Bugs fixed this session:
+- `legalCardIds` returned `[]` when trump maker's hand was empty but indicator
+  still held (trick 8 case).
+- `handlePlay` rejected plays of the indicator when it lived outside the hand.
+- `ai.choosePlayCard` ignored the indicator even when listed as the only
+  legal card.
+- `advanceBid4` infinite-looped when a high bidder passed after bidding.
 
-Pending:
-- `src/engine/ai.js`
-- `server.js`
-- `public/index.html`, `public/styles.css`, `public/client.js`, `public/cards.js`
-- `Dockerfile`, `railway.json`
-- Local smoke test + Railway deploy.
+Smoke/soak verification:
+- `node scripts/soak.js 5` → 5 matches, 88 hands, all invariants hold.
+- `node scripts/e2e.js` → Socket.IO handshake + AI pacing confirmed.
 
-Next-up priority: complete `game.js`, ship it, then AI + server in parallel,
-then client, then deploy.
+Next-up priority:
+- Interactive hands-on test by user in the browser (mobile).
+- Deploy to Railway.
+- Polish UI: card reveal animations, mobile haptics.
+- Implement 2nd human invite link flow.
 
 ## Contact Points for This Project
 

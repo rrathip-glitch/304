@@ -20,14 +20,30 @@
 
 **Start here if you are a fresh instance:**
 
-1. `npm install` then `node server.js`. Smoke test: open two tabs in the same
-   browser, create room from one, join from the other, fill remaining seats
-   with AI, play a hand end-to-end. Watch for view-leak bugs (face-down card
-   leaking rank/suit, trump indicator visible to non-makers).
-2. Build out `docs/TESTING.md` scenarios once verified.
-3. Polish: sound effects, card deal animation, mobile safe-area insets.
-4. PCC (Partner Close Caps) 3-player mechanics — currently deferred; see
-   `docs/RULES.md#partner-close-caps-pcc`.
+1. **Interactive play-through in a real mobile browser.** `npm install`,
+   `npm start`, open `http://<laptop-ip>:3000` on a phone. Create room,
+   add 3 AIs, play a full hand. Verify no view-leak bugs (face-down cards
+   leaking rank/suit to opponents, trump indicator visible to non-makers).
+2. **Deploy to Railway.** Push branch, create Railway project, confirm
+   healthcheck passes. See `docs/DEPLOYMENT.md`.
+3. **Invite-link flow for 2nd human.** Today the 2nd player can join by
+   typing the room code. Add a share button that copies a URL like
+   `https://<domain>/?room=ABCDEF&name=Dad` — client auto-joins.
+4. **Polish:** card deal animation, trick collection animation, trump reveal
+   flourish, sound effects (card play, trick won, token transfer).
+5. **PCC (Partner Close Caps)** 3-player mechanics — currently deferred;
+   see `docs/RULES.md#partner-close-caps-pcc`.
+
+## Verification status
+
+Automated tests (run from repo root):
+- `node scripts/smoke.js` — single-AI-match walkthrough.
+- `node scripts/soak.js 5` — 5 full matches to completion; checks token
+  invariant (always sums to 22).
+- `node scripts/e2e.js` — boots server, connects socket, creates room,
+  adds AIs, starts game, verifies views flow.
+
+All passing as of commit 2b9e265 (2026-04-16).
 
 ## Backlog (not blocking v1 playable)
 
@@ -55,7 +71,8 @@
 
 ## Issues / bugs
 
-None currently open.
+None currently open. Four bugs fixed this session (trump-indicator play
+paths + bid4 infinite loop); see commit 2b9e265.
 
 ## Notes for future sessions
 
