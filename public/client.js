@@ -4,7 +4,16 @@
 (function () {
   'use strict';
 
-  const socket = io();
+  if (typeof io !== 'function') {
+    document.body.innerHTML = '<div style="padding:20px;color:#fff;background:#7a1a1a;font-family:sans-serif">Failed to load Socket.IO client. Check network / reload.</div>';
+    return;
+  }
+  window.addEventListener('error', (e) => {
+    const msg = (e && e.message) || 'Script error';
+    try { const t = document.getElementById('toast'); if (t) { t.textContent = 'JS: ' + msg; t.classList.remove('hidden'); } } catch (_) {}
+  });
+
+  const socket = io({ transports: ['websocket', 'polling'], reconnection: true });
 
   // ---- UI state -------------------------------------------------------------
   const state = {
@@ -124,6 +133,11 @@
     toast(reason);
   });
 
+  socket.on('kicked', (p) => {
+    toast((p && p.reason) || 'Kicked', true);
+    setTimeout(() => window.location.reload(), 1500);
+  });
+
   // ---- Lobby rendering ------------------------------------------------------
   $('#leave-btn').addEventListener('click', () => {
     window.location.reload();
@@ -165,19 +179,49 @@
       row.appendChild(occ);
 
       if (youAreHost && i !== 0) {
-        const btn = document.createElement('button');
-        btn.className = 'btn seat-ai-toggle';
+        const actions = document.createElement('div');
+        actions.className = 'seat-actions';
         if (s && s.isAI) {
-          btn.textContent = 'Remove AI';
-          btn.addEventListener('click', () => socket.emit('removeAI', { seat: i }));
+          const rm = document.createElement('button');
+          rm.className = 'btn ghost small';
+          rm.textContent = 'Remove AI';
+          rm.addEventListener('click', () => socket.emit('removeAI', { seat: i }));
+          actions.appendChild(rm);
         } else if (!s) {
-          btn.textContent = 'Add AI';
-          btn.addEventListener('click', () => socket.emit('addAI', { seat: i }));
+          const add = document.createElement('button');
+          add.className = 'btn ghost small';
+          add.textContent = 'Add AI';
+          add.addEventListener('click', () => socket.emit('addAI', { seat: i }));
+          actions.appendChild(add);
         } else {
-          btn.textContent = '';
-          btn.style.visibility = 'hidden';
+          const kick = document.createElement('button');
+          kick.className = 'btn ghost small danger';
+          kick.textContent = 'Kick';
+          kick.addEventListener('click', () => {
+            if (confirm('Kick ' + s.name + '?')) socket.emit('kickPlayer', { seat: i });
+          });
+          actions.appendChild(kick);
         }
-        row.appendChild(btn);
+        // Move: swap this seat with any other seat
+        const move = document.createElement('select');
+        move.className = 'seat-move';
+        const none = document.createElement('option');
+        none.value = ''; none.textContent = 'Move…';
+        move.appendChild(none);
+        for (let j = 0; j < 4; j++) {
+          if (j === i) continue;
+          const o = document.createElement('option');
+          o.value = String(j);
+          o.textContent = '→ ' + SEAT_LABELS[j];
+          move.appendChild(o);
+        }
+        move.addEventListener('change', () => {
+          const to = parseInt(move.value, 10);
+          if (!isNaN(to)) socket.emit('swapSeats', { a: i, b: to });
+          move.value = '';
+        });
+        actions.appendChild(move);
+        row.appendChild(actions);
       }
 
       list.appendChild(row);

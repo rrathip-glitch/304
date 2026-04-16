@@ -198,10 +198,38 @@ io.on('connection', (socket) => {
     const room = findRoom(roomId);
     if (!room) return emitError(socket, 'room not found');
     const playerName = (name && String(name).trim()) || 'Player';
-    const order = [2, 1, 3];
+
+    // If a disconnected human seat matches this name, resume it.
+    for (let s = 0; s < 4; s++) {
+      const info = room.state.seats[s];
+      if (info && !info.isAI && info.name === playerName && !room.sockets.get(s)) {
+        room.sockets.set(s, socket.id);
+        socket.data.roomId = room.code;
+        socket.data.seat = s;
+        socket.data.name = playerName;
+        socket.join(room.code);
+        socket.emit('roomJoined', { seat: s, view: game.viewFor(room.state, s) });
+        broadcastViews(room);
+        return;
+      }
+    }
+
+    // Otherwise find first empty seat. Prefer 2 (partner), then 1, 3.
+    // If all human seats are taken but AI occupies 1 or 3, replace the AI.
+    const emptyOrder = [2, 1, 3];
     let targetSeat = -1;
-    for (const s of order) {
+    for (const s of emptyOrder) {
       if (!room.state.seats[s]) { targetSeat = s; break; }
+    }
+    if (targetSeat < 0) {
+      for (const s of emptyOrder) {
+        if (room.state.seats[s] && room.state.seats[s].isAI) {
+          if (room.state.phase !== PHASES.WAITING) continue;
+          targetSeat = s;
+          game.removeSeat(room.state, s);
+          break;
+        }
+      }
     }
     if (targetSeat < 0) return emitError(socket, 'room full');
     const seatRes = game.seatPlayer(room.state, { seat: targetSeat, name: playerName, isAI: false });
@@ -276,6 +304,43 @@ io.on('connection', (socket) => {
     const info = room.state.seats[target];
     if (!info || !info.isAI) return emitError(socket, 'seat is not AI');
     game.removeSeat(room.state, target);
+    broadcastViews(room);
+  });
+
+  socket.on('kickPlayer', ({ seat } = {}) => {
+    const room = findRoom(socket.data.roomId);
+    if (!room) return emitError(socket, 'no room');
+    if (socket.data.seat !== 0) return emitError(socket, 'host only');
+    if (room.state.phase !== PHASES.WAITING) return emitError(socket, 'game already started');
+    const target = seat | 0;
+    if (target <= 0 || target > 3) return emitError(socket, 'cannot kick host');
+    const info = room.state.seats[target];
+    if (!info) return emitError(socket, 'seat empty');
+    const sid = room.sockets.get(target);
+    if (sid) {
+      const s = io.sockets.sockets.get(sid);
+      if (s) { s.emit('kicked', { reason: 'Kicked by host' }); s.leave(room.code); }
+      room.sockets.set(target, null);
+    }
+    game.removeSeat(room.state, target);
+    broadcastViews(room);
+  });
+
+  socket.on('swapSeats', ({ a, b } = {}) => {
+    const room = findRoom(socket.data.roomId);
+    if (!room) return emitError(socket, 'no room');
+    if (socket.data.seat !== 0) return emitError(socket, 'host only');
+    if (room.state.phase !== PHASES.WAITING) return emitError(socket, 'game already started');
+    const A = a | 0, B = b | 0;
+    if (A < 0 || A > 3 || B < 0 || B > 3 || A === B) return emitError(socket, 'invalid swap');
+    const seats = room.state.seats;
+    const tmp = seats[A]; seats[A] = seats[B]; seats[B] = tmp;
+    const sA = room.sockets.get(A); const sB = room.sockets.get(B);
+    room.sockets.set(A, sB || null);
+    room.sockets.set(B, sA || null);
+    // Update each connected socket's seat so future actions use the new seat number
+    if (sA) { const s = io.sockets.sockets.get(sA); if (s) s.data.seat = B; }
+    if (sB) { const s = io.sockets.sockets.get(sB); if (s) s.data.seat = A; }
     broadcastViews(room);
   });
 

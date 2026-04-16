@@ -176,13 +176,25 @@ button { cursor: pointer; }
 }
 .seat-row .seat-occupant { flex: 1; color: var(--cream); font-weight: 500; }
 .seat-row .seat-occupant.empty { color: var(--muted); font-style: italic; }
-.seat-row .seat-ai-toggle {
+.seat-row .seat-ai-toggle,
+.seat-row .seat-actions .btn.small {
   font-size: 12px;
   padding: 6px 10px;
   min-height: 32px;
   width: auto;
   display: inline-block;
 }
+.seat-row .seat-actions { display: flex; gap: 6px; align-items: center; }
+.seat-row .seat-move {
+  font-size: 12px;
+  padding: 4px 6px;
+  min-height: 32px;
+  background: rgba(0,0,0,0.25);
+  color: var(--cream);
+  border: 1px solid rgba(0,0,0,0.4);
+  border-radius: 6px;
+}
+.btn.danger { color: #e7a0a0; border-color: rgba(231,160,160,0.4); }
 .lobby-actions { display: flex; flex-direction: column; gap: 8px; }
 
 /* ============ Table ============ */
