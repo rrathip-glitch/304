@@ -117,6 +117,15 @@ button { cursor: pointer; }
 .sep::before { left: 0; }
 .sep::after { right: 0; }
 .sep span { background: transparent; padding: 0 8px; }
+.build-marker {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
 
 /* ============ Buttons ============ */
 .btn {
