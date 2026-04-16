@@ -16,6 +16,50 @@
     startPending: false,   // Start Game button debounce
   };
 
+  // ---- Build stamp & debug overlay -----------------------------------------
+  const BUILD = 'emit-gate-3';
+  console.log('[304] client build =', BUILD);
+  const dbgEvents = [];
+  function dbg(msg) {
+    const t = new Date().toISOString().slice(11, 23);
+    dbgEvents.push(t + ' ' + msg);
+    if (dbgEvents.length > 30) dbgEvents.shift();
+    renderDebug();
+  }
+  function renderDebug() {
+    const ov = document.getElementById('debug-overlay');
+    if (!ov) return;
+    const setText = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+    setText('dbg-build', BUILD);
+    setText('dbg-sock', socket && socket.connected ? 'connected (' + (socket.id || '?') + ')' : 'disconnected');
+    setText('dbg-gate', emitReady ? 'OPEN' : 'CLOSED');
+    setText('dbg-pending', String(pendingEmits.length));
+    const sess = loadSession();
+    setText('dbg-session', sess ? (sess.roomId + ' / ' + sess.name) : 'none');
+    const list = document.getElementById('dbg-events');
+    if (list) {
+      list.innerHTML = '';
+      for (let i = dbgEvents.length - 1; i >= 0; i--) {
+        const li = document.createElement('li');
+        li.textContent = dbgEvents[i];
+        list.appendChild(li);
+      }
+    }
+  }
+  // Toggle overlay by tapping the build marker on the landing screen.
+  setTimeout(() => {
+    const marker = document.getElementById('build-marker');
+    const overlay = document.getElementById('debug-overlay');
+    if (marker && overlay) {
+      marker.classList.add('tappable');
+      marker.addEventListener('click', () => {
+        overlay.classList.toggle('hidden');
+        overlay.classList.toggle('visible');
+        renderDebug();
+      });
+    }
+  }, 0);
+
   // ---- Emit gate ------------------------------------------------------------
   // Prevents the "Start Game loops to landing" class of bugs. When the socket
   // briefly disconnects (Railway proxy / mobile backgrounding) and the user
@@ -33,21 +77,33 @@
   const pendingEmits = [];
   function openGate() {
     emitReady = true;
+    const flushed = pendingEmits.length;
     while (pendingEmits.length) {
       const [name, payload] = pendingEmits.shift();
       socket.emit(name, payload);
     }
+    if (flushed) dbg('gate open, flushed ' + flushed);
+    else dbg('gate open');
+    renderDebug();
   }
-  function closeGate() { emitReady = false; }
+  function closeGate() { emitReady = false; dbg('gate close'); renderDebug(); }
   function gatedEmit(name, payload) {
     if (emitReady && socket.connected) {
+      dbg('emit ' + name);
       socket.emit(name, payload);
+      renderDebug();
       return;
     }
     // Dedup: if the user mashes a button, don't stack identical emits.
     const last = pendingEmits[pendingEmits.length - 1];
-    if (last && last[0] === name && JSON.stringify(last[1]) === JSON.stringify(payload)) return;
+    if (last && last[0] === name && JSON.stringify(last[1]) === JSON.stringify(payload)) {
+      dbg('dedup ' + name);
+      renderDebug();
+      return;
+    }
     pendingEmits.push([name, payload]);
+    dbg('queue ' + name + ' (' + pendingEmits.length + ')');
+    renderDebug();
   }
 
   // ---- Session persistence (survives reloads & socket reconnects) ----------
@@ -171,6 +227,7 @@
   // ask the server to re-bind this socket to our seat. This is what keeps
   // Railway proxy reconnects from kicking us back to the landing screen.
   socket.on('connect', () => {
+    dbg('connect sid=' + (socket.id || '?'));
     setConnBanner(false);
     const sess = loadSession();
     if (sess && sess.roomId && sess.name) {
@@ -181,26 +238,31 @@
       state.roomId = sess.roomId;
       state.name = sess.name;
       if (typeof sess.seat === 'number') state.yourSeat = sess.seat;
+      dbg('emit resume');
       socket.emit('resume', { roomId: sess.roomId, name: sess.name });
     } else {
       // Fresh connection with no session — open the gate so createRoom /
       // joinRoom can flow.
       openGate();
     }
+    renderDebug();
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    dbg('disconnect ' + (reason || ''));
     // Close the gate immediately so nothing the user taps during the blip
     // ends up in Socket.IO's buffer (where it would race past resume on
     // reconnect). Show a small persistent banner instead of a fleeting toast
     // so the user knows we're working on it.
     closeGate();
     setConnBanner(true);
+    renderDebug();
   });
   socket.io.on('reconnect_attempt', () => { /* silent */ });
   socket.on('connect_error', (err) => { console.warn('connect_error', err && err.message); });
 
   socket.on('roomCreated', (payload) => {
+    dbg('roomCreated ' + payload.roomId);
     state.roomId = payload.roomId;
     state.yourSeat = payload.seat;
     state.view = payload.view || null;
@@ -211,6 +273,7 @@
   });
 
   socket.on('roomJoined', (payload) => {
+    dbg('roomJoined seat=' + payload.seat + ' phase=' + (payload.view && payload.view.phase));
     state.yourSeat = payload.seat;
     state.view = payload.view || null;
     if (state.view && state.view.roomId) state.roomId = state.view.roomId;
@@ -229,6 +292,7 @@
 
   socket.on('view', (payload) => {
     const view = payload && payload.view ? payload.view : payload;
+    dbg('view phase=' + (view && view.phase));
     state.view = view;
     if (view && typeof view.yourSeat === 'number') state.yourSeat = view.yourSeat;
     if (view && view.roomId) state.roomId = view.roomId;
@@ -246,6 +310,7 @@
 
   socket.on('actionError', (p) => {
     const reason = (p && p.reason) || 'Illegal action';
+    dbg('actionError ' + reason);
     // If our session is stale (server restarted, room GC'd), clear it and
     // return to landing — but only for session-invalidating reasons, not
     // for ordinary in-game illegal moves.
