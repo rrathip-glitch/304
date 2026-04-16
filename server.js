@@ -28,14 +28,32 @@ try {
 
 const PHASES = game.PHASES;
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const SERVER_STARTED_AT = Date.now();
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// Static assets: client.js / cards.js / styles.css are cache-busted via
+// ?v=<marker> query params in index.html, so we can serve them with long
+// cache TTLs and still ship updates instantly. Express.static honors ETag
+// so changed files still reach the browser, but iOS Safari sometimes ignores
+// ETag — the query-param bust is the belt, this is the suspenders.
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (/\.(js|css)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
+    }
+  },
+}));
+// index.html MUST NOT be cached — it's the shell that references the
+// versioned script URLs. Stale HTML means the old script URLs get re-used.
+app.get('/', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 app.get('/health', (_req, res) => res.status(200).type('text/plain').send('ok'));
+app.get('/version', (_req, res) => res.json({ build: 'emit-gate-3', startedAt: new Date(SERVER_STARTED_AT).toISOString() }));
 
 // roomId -> { code, state, sockets: Map<seat, socketId|null>, aiQueue: [] }
 const rooms = new Map();

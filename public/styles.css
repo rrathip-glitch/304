@@ -147,6 +147,36 @@ button { cursor: pointer; }
 }
 .conn-banner.visible { transform: translateY(0); }
 
+.debug-overlay {
+  position: fixed;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  max-width: 360px;
+  margin: 0 auto;
+  background: rgba(0, 0, 0, 0.82);
+  border: 1px solid var(--gold);
+  color: var(--cream);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 8px 10px;
+  border-radius: 8px;
+  z-index: 120;
+  pointer-events: none;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+.debug-overlay.visible { pointer-events: auto; }
+.debug-row b { color: var(--gold); }
+.debug-events { list-style: none; padding: 0; margin: 4px 0 0; }
+.debug-events li {
+  padding: 1px 0;
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.08);
+  word-break: break-all;
+}
+.build-marker.tappable { cursor: pointer; }
+
 /* ============ Buttons ============ */
 .btn {
   display: block;
