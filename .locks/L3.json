@@ -1,0 +1,11 @@
+{
+  "lane": "L3",
+  "status": "FREE",
+  "session_id": "cse_01FaeKqv5f1h3akTobnq5SRZ",
+  "agent": "Claude",
+  "started_utc": "2026-04-16T19:41:17Z",
+  "heartbeat_utc": "2026-04-16T19:41:17Z",
+  "task": "(unclaimed)",
+  "touches": [],
+  "notes": ""
+}
