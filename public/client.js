@@ -70,10 +70,20 @@
   const nameInput = $('#name-input');
   const codeInput = $('#code-input');
   // Pre-populate name if previously used
+  let savedRoom = '';
   try {
     const saved = localStorage.getItem('p304.name');
-    if (saved) nameInput.value = saved;
+    if (saved) { nameInput.value = saved; state.name = saved; }
+    savedRoom = localStorage.getItem('p304.room') || '';
+    if (savedRoom) codeInput.value = savedRoom;
   } catch (e) { /* ignore */ }
+  // If we have both a saved name and room, attempt silent resume on first connect.
+  socket.on('connect', function attemptResumeOnLoad() {
+    socket.off('connect', attemptResumeOnLoad);
+    if (savedRoom && state.name && !state.roomId) {
+      socket.emit('resume', { roomId: savedRoom, name: state.name });
+    }
+  });
 
   $('#create-btn').addEventListener('click', () => {
     const name = nameInput.value.trim();
@@ -94,7 +104,14 @@
   });
 
   // ---- Socket listeners -----------------------------------------------------
-  socket.on('connect', () => { /* connected */ });
+  let hasConnectedOnce = false;
+  socket.on('connect', () => {
+    if (hasConnectedOnce && state.roomId && state.name) {
+      // Auto-resume: server forgot us when the previous socket dropped.
+      socket.emit('resume', { roomId: state.roomId, name: state.name });
+    }
+    hasConnectedOnce = true;
+  });
 
   socket.on('disconnect', () => { toast('Disconnected — retrying...'); });
 
@@ -102,6 +119,7 @@
     state.roomId = payload.roomId;
     state.yourSeat = payload.seat;
     state.view = payload.view || null;
+    try { localStorage.setItem('p304.room', state.roomId); } catch (e) {}
     setScreen('lobby');
     renderLobby();
   });
@@ -110,8 +128,15 @@
     state.yourSeat = payload.seat;
     state.view = payload.view || null;
     if (state.view && state.view.roomId) state.roomId = state.view.roomId;
-    setScreen('lobby');
-    renderLobby();
+    try { if (state.roomId) localStorage.setItem('p304.room', state.roomId); } catch (e) {}
+    // If we resumed into a game already in progress, go straight to table.
+    if (state.view && state.view.phase && state.view.phase !== 'waiting') {
+      setScreen('table');
+      renderTable();
+    } else {
+      setScreen('lobby');
+      renderLobby();
+    }
   });
 
   socket.on('view', (payload) => {
@@ -131,6 +156,13 @@
   socket.on('actionError', (p) => {
     const reason = (p && p.reason) || 'Illegal action';
     toast(reason);
+    if (reason === 'room not found' || reason === 'no room' || reason === 'no seat to resume') {
+      try { localStorage.removeItem('p304.room'); } catch (e) {}
+      state.roomId = null;
+      state.yourSeat = null;
+      state.view = null;
+      setScreen('landing');
+    }
   });
 
   socket.on('kicked', (p) => {
@@ -140,6 +172,7 @@
 
   // ---- Lobby rendering ------------------------------------------------------
   $('#leave-btn').addEventListener('click', () => {
+    try { localStorage.removeItem('p304.room'); } catch (e) {}
     window.location.reload();
   });
 
@@ -370,26 +403,42 @@
     return set;
   }
 
+  let lastHandSignature = '';
   function renderHand(hand, legalIds) {
     const el = $('#your-hand');
+    const trump = state.view && state.view.trumpSuit;
+    const sorted = hand.slice().sort((a, b) => cardSortCompare(a, b, trump));
+    const sig = sorted.map((c) => c.id).join(',');
+    const changed = sig !== lastHandSignature;
+    lastHandSignature = sig;
     el.innerHTML = '';
-    // Sort hand by suit then rank for stable display
-    const sorted = hand.slice().sort(cardSortCompare);
+    let idx = 0;
     for (const c of sorted) {
       const legal = legalIds.has(c.id);
       const cardEl = Cards.render(c, {
         legal: legal,
         onClick: (card) => onCardTap(card, legal),
       });
+      if (changed) {
+        cardEl.classList.add('dealing');
+        cardEl.style.animationDelay = (idx * 40) + 'ms';
+      }
       el.appendChild(cardEl);
+      idx++;
     }
   }
 
-  function cardSortCompare(a, b) {
+  function cardSortCompare(a, b, trump) {
     const SUIT_ORD = { S: 0, H: 1, D: 2, C: 3 };
     const RANK_ORD = { '7': 0, '8': 1, Q: 2, K: 3, '10': 4, A: 5, '9': 6, J: 7 };
+    // Trump group first (if known).
+    if (trump) {
+      const aT = a.suit === trump ? 0 : 1;
+      const bT = b.suit === trump ? 0 : 1;
+      if (aT !== bT) return aT - bT;
+    }
     if (a.suit !== b.suit) return SUIT_ORD[a.suit] - SUIT_ORD[b.suit];
-    return RANK_ORD[b.rank] - RANK_ORD[a.rank]; // high to low within suit
+    return RANK_ORD[b.rank] - RANK_ORD[a.rank];
   }
 
   function onCardTap(card, legal) {
@@ -463,6 +512,25 @@
   function renderActionBar(v) {
     const chipsEl = $('#action-chips');
     const extrasEl = $('#action-extras');
+    if (v.phase === 'game_over') {
+      chipsEl.innerHTML = '';
+      extrasEl.innerHTML = '';
+      const winTeam = (v.tokens && v.tokens[0] >= 22) ? 0 : 1;
+      const yourTeam = (state.yourSeat != null) ? (state.yourSeat % 2) : 0;
+      const msg = document.createElement('div');
+      msg.className = 'chip';
+      msg.textContent = winTeam === yourTeam ? '🏆 Your team wins' : 'Opponents win';
+      chipsEl.appendChild(msg);
+      const again = document.createElement('button');
+      again.className = 'chip primary';
+      again.textContent = 'New game';
+      again.addEventListener('click', () => {
+        try { localStorage.removeItem('p304.room'); } catch (e) {}
+        window.location.reload();
+      });
+      chipsEl.appendChild(again);
+      return;
+    }
     chipsEl.innerHTML = '';
     extrasEl.innerHTML = '';
 

@@ -280,8 +280,14 @@ function handleTrumpPick(state, seat, action, round) {
     state.bid8Passes = 0;
     log(state, 'Second batch dealt. 8-card bidding (min 250).');
   } else {
-    state.phase = PHASES.OPEN_CHOICE;
-    state.currentBidder = null;
+    // Resume bid8 for any remaining seats (each gets one turn in the round).
+    if (state.bid8Turns >= 4) {
+      state.phase = PHASES.OPEN_CHOICE;
+      state.currentBidder = null;
+    } else {
+      state.phase = PHASES.BID8;
+      state.currentBidder = next(state.trumpMaker);
+    }
   }
   return { ok: true };
 }
@@ -671,7 +677,12 @@ function viewFor(state, seat) {
       }
       return { seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator };
     }),
-    lastTrick: state.lastTrick ? state.lastTrick.map((p) => ({ seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator })) : null,
+    lastTrick: state.lastTrick ? state.lastTrick.map((p) => {
+      if (p.faceDown && p.seat !== seat && seat !== state.trumpMaker && !state.trumpRevealed) {
+        return { seat: p.seat, faceDown: true, hidden: true };
+      }
+      return { seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator };
+    }) : null,
     legalActions: state.currentPlayer === seat || state.currentBidder === seat || (state.phase === PHASES.TRUMP_PICK1 && seat === state.trumpMaker) || (state.phase === PHASES.TRUMP_PICK2 && seat === state.trumpMaker) || (state.phase === PHASES.OPEN_CHOICE && seat === state.trumpMaker) || state.phase === PHASES.HAND_END ? legalActions(state, seat) : [],
   };
   return view;

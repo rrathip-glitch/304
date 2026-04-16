@@ -56,6 +56,12 @@ function newRoomCode() {
   throw new Error('room code space exhausted');
 }
 
+function isHost(socket, room) {
+  if (!room || !socket || !socket.data) return false;
+  if (socket.data.isHost) return true;
+  return room.hostName && socket.data.name === room.hostName;
+}
+
 function whoseTurn(state) {
   switch (state.phase) {
     case PHASES.BID4: return state.currentBidder;
@@ -182,7 +188,7 @@ io.on('connection', (socket) => {
     const playerName = (name && String(name).trim()) || 'Player';
     const code = newRoomCode();
     const state = game.createGame(code);
-    const room = { code, state, sockets: new Map([[0, null], [1, null], [2, null], [3, null]]), aiQueue: [] };
+    const room = { code, state, sockets: new Map([[0, null], [1, null], [2, null], [3, null]]), aiQueue: [], hostName: playerName };
     const seatRes = game.seatPlayer(state, { seat: 0, name: playerName, isAI: false });
     if (!seatRes.ok) return emitError(socket, seatRes.reason);
     rooms.set(code, room);
@@ -190,6 +196,7 @@ io.on('connection', (socket) => {
     socket.data.roomId = code;
     socket.data.seat = 0;
     socket.data.name = playerName;
+    socket.data.isHost = true;
     socket.join(code);
     socket.emit('roomCreated', { roomId: code, seat: 0, view: game.viewFor(state, 0) });
   });
@@ -207,6 +214,7 @@ io.on('connection', (socket) => {
         socket.data.roomId = room.code;
         socket.data.seat = s;
         socket.data.name = playerName;
+        socket.data.isHost = playerName === room.hostName;
         socket.join(room.code);
         socket.emit('roomJoined', { seat: s, view: game.viewFor(room.state, s) });
         broadcastViews(room);
@@ -257,6 +265,7 @@ io.on('connection', (socket) => {
     socket.data.roomId = room.code;
     socket.data.seat = found;
     socket.data.name = playerName;
+    socket.data.isHost = playerName === room.hostName;
     socket.join(room.code);
     socket.emit('roomJoined', { seat: found, view: game.viewFor(room.state, found) });
     broadcastViews(room);
@@ -265,7 +274,7 @@ io.on('connection', (socket) => {
   socket.on('setSeat', ({ seat } = {}) => {
     const room = findRoom(socket.data.roomId);
     if (!room) return emitError(socket, 'no room');
-    if (socket.data.seat !== 0) return emitError(socket, 'host only');
+    if (!isHost(socket, findRoom(socket.data.roomId))) return emitError(socket, "host only");
     if (room.state.phase !== PHASES.WAITING) return emitError(socket, 'game already started');
     const target = seat | 0;
     if (target < 0 || target > 3) return emitError(socket, 'invalid seat');
@@ -284,7 +293,7 @@ io.on('connection', (socket) => {
   socket.on('addAI', ({ seat } = {}) => {
     const room = findRoom(socket.data.roomId);
     if (!room) return emitError(socket, 'no room');
-    if (socket.data.seat !== 0) return emitError(socket, 'host only');
+    if (!isHost(socket, findRoom(socket.data.roomId))) return emitError(socket, "host only");
     if (room.state.phase !== PHASES.WAITING) return emitError(socket, 'game already started');
     const target = seat | 0;
     if (target < 0 || target > 3) return emitError(socket, 'invalid seat');
@@ -297,7 +306,7 @@ io.on('connection', (socket) => {
   socket.on('removeAI', ({ seat } = {}) => {
     const room = findRoom(socket.data.roomId);
     if (!room) return emitError(socket, 'no room');
-    if (socket.data.seat !== 0) return emitError(socket, 'host only');
+    if (!isHost(socket, findRoom(socket.data.roomId))) return emitError(socket, "host only");
     if (room.state.phase !== PHASES.WAITING) return emitError(socket, 'game already started');
     const target = seat | 0;
     if (target < 0 || target > 3) return emitError(socket, 'invalid seat');
@@ -310,7 +319,7 @@ io.on('connection', (socket) => {
   socket.on('kickPlayer', ({ seat } = {}) => {
     const room = findRoom(socket.data.roomId);
     if (!room) return emitError(socket, 'no room');
-    if (socket.data.seat !== 0) return emitError(socket, 'host only');
+    if (!isHost(socket, findRoom(socket.data.roomId))) return emitError(socket, "host only");
     if (room.state.phase !== PHASES.WAITING) return emitError(socket, 'game already started');
     const target = seat | 0;
     if (target <= 0 || target > 3) return emitError(socket, 'cannot kick host');
@@ -329,7 +338,7 @@ io.on('connection', (socket) => {
   socket.on('swapSeats', ({ a, b } = {}) => {
     const room = findRoom(socket.data.roomId);
     if (!room) return emitError(socket, 'no room');
-    if (socket.data.seat !== 0) return emitError(socket, 'host only');
+    if (!isHost(socket, findRoom(socket.data.roomId))) return emitError(socket, "host only");
     if (room.state.phase !== PHASES.WAITING) return emitError(socket, 'game already started');
     const A = a | 0, B = b | 0;
     if (A < 0 || A > 3 || B < 0 || B > 3 || A === B) return emitError(socket, 'invalid swap');
@@ -347,7 +356,7 @@ io.on('connection', (socket) => {
   socket.on('startGame', () => {
     const room = findRoom(socket.data.roomId);
     if (!room) return emitError(socket, 'no room');
-    if (socket.data.seat !== 0) return emitError(socket, 'host only');
+    if (!isHost(socket, findRoom(socket.data.roomId))) return emitError(socket, "host only");
     if (room.state.phase !== PHASES.WAITING) return emitError(socket, 'game already started');
     for (let s = 0; s < 4; s++) {
       if (!room.state.seats[s]) {
