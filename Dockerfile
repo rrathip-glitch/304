@@ -1,13 +1,13 @@
 FROM node:20-alpine
+
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev --no-audit --no-fund
+RUN npm ci --omit=dev || npm install --omit=dev
 
-COPY server.js ./
-COPY public ./public
-COPY src ./src
+COPY . .
 
-ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["node", "server.js"]
+ENV PORT=3000 NODE_ENV=production
+
+CMD ["node","server.js"]

@@ -1,120 +1,132 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b3d2e" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>304 — Card Game</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#0d4a2b">
+  <title>304 — card game</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="app">
-    <!-- Title screen -->
-    <section id="screen-title" class="screen">
-      <div class="title-box">
+  <div id="app" class="screen-landing">
+    <!-- Toast container for errors/info -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- ========== LANDING ========== -->
+    <section id="landing" class="screen">
+      <div class="landing-card">
         <h1 class="title">304</h1>
-        <p class="tagline">Sri Lankan trick-taking for two teams of two.</p>
-        <button id="btn-start" class="btn btn-primary">Play (you vs AI)</button>
-        <button id="btn-rules" class="btn btn-ghost">How to play</button>
-        <p class="footnote">v1 solo · <a href="https://www.pagat.com/jass/304.html" target="_blank" rel="noopener">rules</a></p>
+        <p class="subtitle">Sri Lankan trick-taking, for four.</p>
+
+        <label class="field">
+          <span>Your name</span>
+          <input id="name-input" type="text" maxlength="20" autocomplete="off" placeholder="Nimal" />
+        </label>
+
+        <button id="create-btn" class="btn primary">Create room</button>
+
+        <div class="sep"><span>or</span></div>
+
+        <label class="field">
+          <span>Room code</span>
+          <input id="code-input" type="text" maxlength="6" autocomplete="off" placeholder="ABC123" />
+        </label>
+        <button id="join-btn" class="btn">Join room</button>
       </div>
     </section>
 
-    <!-- Rules overlay -->
-    <section id="screen-rules" class="screen hidden">
-      <div class="rules-box">
-        <h2>How to play 304</h2>
-        <ol>
-          <li><b>Deal:</b> 8 cards each, 4 players, partners opposite. You (bottom) partner with top.</li>
-          <li><b>Bid:</b> promise a number of points your team will win in tricks. Minimum 160. 190 is rare.</li>
-          <li><b>Trump:</b> highest bidder picks the trump suit (hidden at first).</li>
-          <li><b>Play:</b> counter-clockwise. Must follow suit. If you can't, your card is played face-down.</li>
-          <li><b>Ranks (high→low):</b> J, 9, A, 10, K, Q, 8, 7.</li>
-          <li><b>Points:</b> J=3, 9=2, A=1.1, 10=1, K=0.3, Q=0.2, 8=7=0. Total = 30.4.</li>
-          <li><b>Win tokens:</b> meet your bid → win tokens; fail → lose tokens. All 8 tricks = 5 tokens (high court).</li>
-          <li><b>Match:</b> each team starts with 11 tokens; first to 22 wins.</li>
-        </ol>
-        <button id="btn-rules-close" class="btn btn-primary">Got it</button>
-      </div>
-    </section>
-
-    <!-- Game screen -->
-    <section id="screen-game" class="screen hidden">
-      <header class="topbar">
-        <div class="tokens" id="tokens">
-          <span class="team us">Us <b id="tokens-us">11</b></span>
-          <span class="team them">Them <b id="tokens-them">11</b></span>
-        </div>
-        <div class="hand-no">Hand <span id="hand-no">1</span></div>
-        <button id="btn-menu" class="btn btn-small">⋯</button>
+    <!-- ========== LOBBY ========== -->
+    <section id="lobby" class="screen">
+      <header class="lobby-head">
+        <div class="room-label">Room</div>
+        <div id="lobby-code" class="room-code">------</div>
+        <div class="hint">Share this code with your partner.</div>
       </header>
 
-      <main class="table">
-        <!-- Partner (top) -->
-        <div class="seat seat-partner" id="seat-2">
-          <div class="name" id="name-2">Partner</div>
-          <div class="hand-mini" id="hand-mini-2"></div>
-          <div class="bid-tag" id="bid-tag-2"></div>
-        </div>
+      <div class="seats" id="lobby-seats">
+        <!-- seats 0..3 injected: North/East/South/West -->
+      </div>
 
-        <!-- Left opponent -->
-        <div class="seat seat-left" id="seat-3">
-          <div class="name" id="name-3">Left</div>
-          <div class="hand-mini vertical" id="hand-mini-3"></div>
-          <div class="bid-tag" id="bid-tag-3"></div>
-        </div>
-
-        <!-- Right opponent -->
-        <div class="seat seat-right" id="seat-1">
-          <div class="name" id="name-1">Right</div>
-          <div class="hand-mini vertical" id="hand-mini-1"></div>
-          <div class="bid-tag" id="bid-tag-1"></div>
-        </div>
-
-        <!-- Center: trick + trump + message -->
-        <div class="center">
-          <div class="trump-zone">
-            <div class="trump-slot" id="trump-slot">
-              <span class="trump-label">Trump</span>
-              <div class="trump-card" id="trump-card"></div>
-            </div>
-            <div class="trump-state" id="trump-state"></div>
-          </div>
-          <div class="trick" id="trick">
-            <div class="trick-card trick-2" id="trick-2"></div>
-            <div class="trick-card trick-1" id="trick-1"></div>
-            <div class="trick-card trick-0" id="trick-0"></div>
-            <div class="trick-card trick-3" id="trick-3"></div>
-          </div>
-          <div class="message" id="message"></div>
-        </div>
-
-        <!-- You (bottom) -->
-        <div class="seat seat-you" id="seat-0">
-          <div class="name" id="name-0">You</div>
-          <div class="bid-tag" id="bid-tag-0"></div>
-          <div class="hand" id="hand-0" aria-label="Your hand"></div>
-        </div>
-      </main>
-
-      <footer class="actionbar" id="actionbar">
-        <!-- populated by JS -->
-      </footer>
+      <div class="lobby-actions">
+        <button id="start-btn" class="btn primary hidden">Start game</button>
+        <button id="leave-btn" class="btn ghost">Leave</button>
+      </div>
     </section>
 
-    <!-- Hand-end / game-end overlay -->
-    <section id="screen-overlay" class="screen hidden">
-      <div class="overlay-box">
-        <h2 id="overlay-title"></h2>
-        <div id="overlay-body"></div>
-        <button id="overlay-btn" class="btn btn-primary">Continue</button>
+    <!-- ========== TABLE ========== -->
+    <section id="table" class="screen">
+      <header class="table-head">
+        <div class="tokens">
+          <span class="team team-0" id="tok-0" title="Your team">
+            <span class="label">Us</span>
+            <span class="pips" id="pips-0"></span>
+          </span>
+          <span class="team team-1" id="tok-1" title="Opponents">
+            <span class="label">Them</span>
+            <span class="pips" id="pips-1"></span>
+          </span>
+        </div>
+        <div class="head-right">
+          <span id="hand-num" class="hand-num">Hand 1</span>
+          <span id="table-code" class="room-code small">------</span>
+        </div>
+      </header>
+
+      <div class="phase-banner" id="phase-banner"></div>
+
+      <div class="play-area">
+        <!-- Partner (top) -->
+        <div class="seat-slot seat-top" id="seat-top">
+          <div class="seat-name"></div>
+          <div class="seat-cards"></div>
+          <div class="seat-bid"></div>
+        </div>
+
+        <!-- L-opp (left) -->
+        <div class="seat-slot seat-left" id="seat-left">
+          <div class="seat-name"></div>
+          <div class="seat-cards vertical"></div>
+          <div class="seat-bid"></div>
+        </div>
+
+        <!-- R-opp (right) -->
+        <div class="seat-slot seat-right" id="seat-right">
+          <div class="seat-name"></div>
+          <div class="seat-cards vertical"></div>
+          <div class="seat-bid"></div>
+        </div>
+
+        <!-- Trick center -->
+        <div class="trick" id="trick">
+          <div class="trick-card slot-top"></div>
+          <div class="trick-card slot-right"></div>
+          <div class="trick-card slot-bottom"></div>
+          <div class="trick-card slot-left"></div>
+        </div>
       </div>
+
+      <!-- Your hand (bottom) -->
+      <div class="seat-slot seat-bottom" id="seat-bottom">
+        <div class="seat-name you"></div>
+        <div class="your-hand" id="your-hand"></div>
+      </div>
+
+      <!-- Action bar -->
+      <div class="action-bar" id="action-bar">
+        <div class="action-chips" id="action-chips"></div>
+        <div class="action-extras" id="action-extras"></div>
+      </div>
+
+      <!-- Log -->
+      <details class="log-wrap" id="log-wrap">
+        <summary>Log</summary>
+        <ul class="log" id="log"></ul>
+      </details>
     </section>
   </div>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script src="cards.js"></script>
-  <script src="game.js"></script>
+  <script src="client.js"></script>
 </body>
 </html>
