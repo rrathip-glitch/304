@@ -123,5 +123,41 @@ within that round.
 
 ---
 
+## 2026-04-16 — Trump indicator tracked outside hand in closed games
+
+**Decision:** While the trump is closed, `state.trumpIndicator` is the
+authoritative location of the indicator card. `state.hands[trumpMaker]`
+contains the other 7 cards only. When the indicator becomes playable
+(face-down cut on a non-trump trick, or forced final card of trick 8),
+`handlePlay` and `legalCardIds` look it up from `trumpIndicator` and
+emit it in the legal cardIds list. The AI mirrors this by folding the
+indicator into its candidate pool.
+
+**Alternatives:** Keep the indicator in the trump maker's hand with a
+`hidden: true` flag; filter it out on view.
+
+**Rationale:** Separating the indicator removes a whole class of bugs
+where the indicator accidentally shows up in hand counts, hand-point
+totals, or legal-card-to-follow calculations. The tradeoff is a small
+amount of extra lookup logic in two places (play + legalCards), which
+is straightforward.
+
+---
+
+## 2026-04-16 — Parallel subagents for independent file scaffolding
+
+**Decision:** For this session's scaffolding pass (engine/client/deploy),
+launch multiple Claude Code subagents in parallel, each writing one
+independent file or file group with a tight, self-contained prompt.
+
+**Alternatives:** Sequential one-agent-at-a-time writes.
+
+**Rationale:** Files like `public/*` and `Dockerfile` share no code
+state with `src/engine/game.js`, so serialization only added wall-clock
+time. A single Write per file inside each subagent kept the transcript
+short enough to avoid stream-timeouts on the bigger files.
+
+---
+
 *Append new entries below this line. Do not modify prior entries — if a
 decision is reversed, add a new entry that references and supersedes it.*
