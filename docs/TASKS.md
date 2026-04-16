@@ -14,7 +14,7 @@
 
 **Start here if you are a fresh instance:**
 
-1. Build `src/engine/game.js` — full state machine implementing `docs/RULES.md`.
+1. [CLAIMED: opus-4.7 / session 0136Bhfw 2026-04-16] Build `src/engine/game.js` — full state machine implementing `docs/RULES.md`.
    Entry points:
    - `createGame()` — returns initial state.
    - `seatPlayer(state, { seat, name, isAI })`
