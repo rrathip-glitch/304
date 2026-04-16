@@ -228,18 +228,27 @@ function handleBid4(state, seat, action) {
 
 function advanceBid4(state) {
   const activeBidders = [0, 1, 2, 3].filter((s) => !state.passedSeats.includes(s));
-  if (state.highBid && activeBidders.length === 1 && activeBidders[0] === state.highBid.bidder) {
+  // High bidder wins if everyone else has passed, even if they themselves later pass.
+  if (state.highBid && activeBidders.length <= 1) {
     return enterTrumpPick1(state);
   }
-  const allPassed = state.passedSeats.length === 4 && !state.highBid;
-  if (allPassed) {
+  if (state.passedSeats.length >= 4 && !state.highBid) {
     log(state, 'All passed. Redealing.');
     state.dealer = next(state.dealer);
     startHand(state);
     return { ok: true };
   }
+  // Find next unpassed seat. Guard against all-passed by limiting iterations.
   let p = next(state.currentBidder);
-  while (state.passedSeats.includes(p)) p = next(p);
+  for (let i = 0; i < 4 && state.passedSeats.includes(p); i++) p = next(p);
+  if (state.passedSeats.includes(p)) {
+    // Defensive: no active bidder found. If highBid exists, award it.
+    if (state.highBid) return enterTrumpPick1(state);
+    log(state, 'All passed (defensive). Redealing.');
+    state.dealer = next(state.dealer);
+    startHand(state);
+    return { ok: true };
+  }
   state.currentBidder = p;
   return { ok: true };
 }

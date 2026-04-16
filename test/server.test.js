@@ -144,6 +144,24 @@ function waitEvent(sock, name, timeoutMs = 2000) {
   });
 }
 
+// Wait for a view whose payload matches predicate. Drains intermediate views.
+function waitView(sock, predicate, timeoutMs = 2000) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      sock.off('view', handler);
+      reject(new Error('timeout waiting for matching view'));
+    }, timeoutMs);
+    const handler = (payload) => {
+      if (predicate(payload)) {
+        clearTimeout(t);
+        sock.off('view', handler);
+        resolve(payload);
+      }
+    };
+    sock.on('view', handler);
+  });
+}
+
 async function runScenario() {
   const boot = await bootServer();
   const url = `http://127.0.0.1:${boot.port}`;
@@ -169,8 +187,8 @@ async function runScenario() {
       assert.equal(joined.seat, 2);
     });
 
-    const hostView = waitEvent(host, 'view');
-    const guestView = waitEvent(guest, 'view');
+    const hostView = waitView(host, (p) => p.view && p.view.phase === 'bid4');
+    const guestView = waitView(guest, (p) => p.view && p.view.phase === 'bid4');
     host.emit('startGame');
     const [hv, gv] = await Promise.all([hostView, guestView]);
     ok('startGame triggers bid4 phase for both clients', () => {

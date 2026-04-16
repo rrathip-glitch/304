@@ -2,6 +2,7 @@
 
 const { ok, assert, newGame, makeRng } = require('./helpers');
 const game = require('../src/engine/game');
+const cards = require('../src/engine/cards');
 
 ok('after startHand: phase=bid4, currentBidder=(dealer+3)%4, hand size 4', () => {
   const { state } = newGame();
@@ -96,7 +97,7 @@ ok('demandRedeal: legal only for dealer\'s right-hand opponent on first turn wit
     const rng = makeRng(seed);
     game.startHand(state, rng);
     const first = state.currentBidder;
-    const pts = state.hands[first].reduce((s, c) => s + ({ J: 30, '9': 20, A: 11, '10': 10, K: 3, Q: 2, '8': 0, '7': 0 }[c.rank]), 0);
+    const pts = cards.handPoints(state.hands[first]);
     if (pts < 15) {
       // A non-first seat cannot demand redeal.
       const wrong = game.applyAction(state, (first + 3) % 4, { type: 'demandRedeal' });
