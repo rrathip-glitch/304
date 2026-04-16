@@ -3,6 +3,30 @@
 No automated test framework yet. Manual scenarios are the verification path.
 A future instance may add `node --test` with the Node test runner.
 
+## Orchestration harness (verified 2026-04-16)
+
+Smoke test of the multi-agent sync infrastructure added by the
+`claude/create-collaboration-guide-NBO3E` branch. Run from the repo root:
+
+```bash
+bash .claude/hooks/session-start.sh      # boot banner + fetch + pull + board
+bash scripts/orchestrate.sh init         # seed .locks/ FREE entries (idempotent)
+bash scripts/orchestrate.sh board        # markdown lane table
+bash scripts/orchestrate.sh status       # JSON dump
+bash scripts/orchestrate.sh claim L6 "smoke"
+bash scripts/orchestrate.sh heartbeat L6 # CLAIMED → WIP + refresh
+CLAUDE_SESSION_ID="other" bash scripts/orchestrate.sh claim L6 "collide"  # exit 3
+bash scripts/orchestrate.sh release L6 --status DONE --summary "harness verified"
+bash scripts/orchestrate.sh prune L5 "simulated stale"
+echo '{"tool_input":{"command":"git push"}}' | bash .claude/hooks/pre-push.sh
+bash .claude/hooks/stop.sh               # reminder when a lock is held
+```
+
+Last pass: commit `7ae60a5` on `claude/create-collaboration-guide-NBO3E`.
+All nine steps passed — hooks print expected output, claim collision exits
+non-zero, commits land on origin after each mutating call, board reflects
+every status transition.
+
 ## Manual Test Scenarios
 
 ### Setup
