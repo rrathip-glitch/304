@@ -48,6 +48,7 @@
       </div>
 
       <div class="lobby-actions">
+        <button id="share-btn" class="btn">Share invite link</button>
         <button id="start-btn" class="btn primary hidden">Start game</button>
         <button id="leave-btn" class="btn ghost">Leave</button>
       </div>
@@ -67,6 +68,10 @@
           </span>
         </div>
         <div class="head-right">
+          <button id="mute-btn" class="icon-btn" aria-label="Toggle sound" title="Toggle sound">
+            <span class="icon-on">&#x1F50A;</span>
+            <span class="icon-off">&#x1F507;</span>
+          </button>
           <span id="hand-num" class="hand-num">Hand 1</span>
           <span id="table-code" class="room-code small">------</span>
         </div>
@@ -119,13 +124,25 @@
 
       <!-- Log -->
       <details class="log-wrap" id="log-wrap">
-        <summary>Log</summary>
+        <summary>Log <button id="history-btn" class="mini-btn" type="button">Tricks</button></summary>
         <ul class="log" id="log"></ul>
       </details>
+    </section>
+
+    <!-- ========== TRICK HISTORY MODAL ========== -->
+    <section id="history-modal" class="modal hidden" aria-modal="true" role="dialog" aria-label="Trick history">
+      <div class="modal-card">
+        <div class="modal-head">
+          <h3>Tricks this hand</h3>
+          <button id="history-close" class="icon-btn" aria-label="Close">&#x2715;</button>
+        </div>
+        <div id="history-body" class="modal-body"></div>
+      </div>
     </section>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="fx.js"></script>
   <script src="cards.js"></script>
   <script src="client.js"></script>
 </body>

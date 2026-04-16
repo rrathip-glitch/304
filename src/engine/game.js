@@ -58,6 +58,7 @@ function createGame(roomId = '') {
     trickPoints: [0, 0],
     tricksPlayed: 0,
     lastTrick: null,
+    trickHistory: [],
     pendingSecondBatch: null,
     dealtFirstBatch: false,
   };
@@ -100,6 +101,7 @@ function startHand(state, rng = Math.random) {
   state.trickPoints = [0, 0];
   state.tricksPlayed = 0;
   state.lastTrick = null;
+  state.trickHistory = [];
   state.dealtFirstBatch = true;
 
   const deck = cards.shuffle(cards.makeDeck(), rng);
@@ -482,6 +484,15 @@ function resolveTrick(state) {
   state.trickPoints[teamWinner] += pts;
   state.lastTrick = state.currentTrick.slice();
   state.tricksPlayed += 1;
+  state.trickHistory.push({
+    index: state.tricksPlayed,
+    winnerSeat,
+    leader: state.trickLeader,
+    points: pts,
+    cards: state.currentTrick.map((p) => ({
+      seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator,
+    })),
+  });
   log(state, `${state.seats[winnerSeat].name} won trick ${state.tricksPlayed} (+${cards.displayPoints(pts)}).`);
 
   const autoOpen = !state.trumpRevealed && state.tricksPlayed === 1 && state.highBid && state.highBid.amount >= 250;
@@ -681,6 +692,19 @@ function viewFor(state, seat) {
       return { seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator };
     }),
     lastTrick: state.lastTrick ? state.lastTrick.map((p) => ({ seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator })) : null,
+    trickHistory: (state.trickHistory || []).map((t) => ({
+      index: t.index,
+      winnerSeat: t.winnerSeat,
+      leader: t.leader,
+      points: t.points,
+      cards: t.cards.map((p) => {
+        // If closed and a face-down non-indicator card from another seat, hide rank/suit.
+        if (p.faceDown && !p.isTrumpIndicator && p.seat !== seat && !state.trumpRevealed) {
+          return { seat: p.seat, faceDown: true, hidden: true };
+        }
+        return { seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator };
+      }),
+    })),
     legalActions: state.currentPlayer === seat || state.currentBidder === seat || (state.phase === PHASES.TRUMP_PICK1 && seat === state.trumpMaker) || (state.phase === PHASES.TRUMP_PICK2 && seat === state.trumpMaker) || (state.phase === PHASES.OPEN_CHOICE && seat === state.trumpMaker) || state.phase === PHASES.HAND_END ? legalActions(state, seat) : [],
   };
   return view;

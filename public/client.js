@@ -66,6 +66,19 @@
     if (saved) nameInput.value = saved;
   } catch (e) { /* ignore */ }
 
+  // Auto-join from ?room=XYZ&name=Foo query params
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlRoom = (urlParams.get('room') || '').toUpperCase().trim();
+  const urlName = (urlParams.get('name') || '').trim();
+  if (urlRoom) codeInput.value = urlRoom;
+  if (urlName) nameInput.value = urlName;
+  if (urlRoom && (urlName || nameInput.value.trim())) {
+    const name = (urlName || nameInput.value.trim());
+    state.name = name;
+    try { localStorage.setItem('p304.name', name); } catch (e) {}
+    socket.emit('joinRoom', { roomId: urlRoom, name });
+  }
+
   $('#create-btn').addEventListener('click', () => {
     const name = nameInput.value.trim();
     if (!name) { toast('Enter your name first'); return; }
@@ -83,6 +96,60 @@
     try { localStorage.setItem('p304.name', name); } catch (e) {}
     socket.emit('joinRoom', { roomId, name });
   });
+
+  // Share invite link
+  $('#share-btn').addEventListener('click', async () => {
+    if (!state.roomId) { toast('Room code not ready yet'); return; }
+    const url = inviteUrlFor(state.roomId);
+    const shareData = {
+      title: '304 — join my game',
+      text: 'Join my 304 game (room ' + state.roomId + ')',
+      url,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (e) { /* user dismissed; fall through to copy */ }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Invite link copied', false);
+    } catch (e) {
+      // Old fallback: show prompt
+      window.prompt('Copy this invite link:', url);
+    }
+  });
+
+  function inviteUrlFor(roomId) {
+    const loc = window.location;
+    return loc.origin + loc.pathname + '?room=' + encodeURIComponent(roomId);
+  }
+
+  // Unlock audio on first user gesture (iOS/Safari requirement).
+  function unlockFXOnce() {
+    try { if (window.FX) FX.unlock(); } catch (e) {}
+    window.removeEventListener('pointerdown', unlockFXOnce);
+    window.removeEventListener('keydown', unlockFXOnce);
+  }
+  window.addEventListener('pointerdown', unlockFXOnce, { once: true });
+  window.addEventListener('keydown', unlockFXOnce, { once: true });
+
+  // Mute toggle
+  const muteBtn = $('#mute-btn');
+  function refreshMuteBtn() {
+    if (!muteBtn || !window.FX) return;
+    muteBtn.classList.toggle('muted', FX.isMuted());
+  }
+  refreshMuteBtn();
+  if (muteBtn) {
+    muteBtn.addEventListener('click', () => {
+      if (!window.FX) return;
+      FX.setMuted(!FX.isMuted());
+      refreshMuteBtn();
+      if (!FX.isMuted()) { FX.unlock(); FX.sound.yourTurn(); }
+    });
+  }
 
   // ---- Socket listeners -----------------------------------------------------
   socket.on('connect', () => { /* connected */ });
@@ -107,9 +174,26 @@
 
   socket.on('view', (payload) => {
     const view = payload && payload.view ? payload.view : payload;
+    const prev = state.view;
+
+    // If a trick just completed (tricksPlayed advanced), play the collect
+    // animation against the *previous* trick before applying the new view.
+    if (prev && view && view.tricksPlayed > (prev.tricksPlayed || 0) && prev.currentTrick && prev.currentTrick.length === 4) {
+      playTrickCollectAnimation(prev, () => {
+        state.view = view;
+        if (typeof view.yourSeat === 'number') state.yourSeat = view.yourSeat;
+        if (view.roomId) state.roomId = view.roomId;
+        maybePlayEventFX(prev, view);
+        if (view.phase === 'waiting') { setScreen('lobby'); renderLobby(); }
+        else { setScreen('table'); renderTable(); }
+      });
+      return;
+    }
+
     state.view = view;
     if (view && typeof view.yourSeat === 'number') state.yourSeat = view.yourSeat;
     if (view && view.roomId) state.roomId = view.roomId;
+    maybePlayEventFX(prev, view);
     if (view && view.phase === 'waiting') {
       setScreen('lobby');
       renderLobby();
@@ -119,10 +203,96 @@
     }
   });
 
+  function playTrickCollectAnimation(prevView, done) {
+    const reduced = matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) { setTimeout(done, 0); return; }
+    const trickEl = document.getElementById('trick');
+    if (!trickEl) { setTimeout(done, 0); return; }
+    // Determine winner seat from completed trick via client-side resolution.
+    const winnerSeat = resolveWinnerSeat(prevView, prevView.currentTrick);
+    // Mark winner slot
+    const slotName = winnerSeat != null ? slotOfSeat(winnerSeat) : null;
+    const slots = trickEl.querySelectorAll('.trick-card');
+    slots.forEach((el) => el.classList.remove('winner'));
+    if (slotName) {
+      const w = trickEl.querySelector('.trick-card.slot-' + slotName);
+      if (w) w.classList.add('winner');
+    }
+    // Allow the winnerPulse to play, then collect.
+    setTimeout(() => {
+      trickEl.classList.add('collecting');
+      setTimeout(() => {
+        trickEl.classList.remove('collecting');
+        slots.forEach((el) => el.classList.remove('winner'));
+        done();
+      }, 340);
+    }, 260);
+  }
+
+  // Client-side winner derivation (mirrors engine rules — for animation only).
+  function resolveWinnerSeat(v, trick) {
+    if (!trick || !trick.length) return null;
+    const trump = v.trumpRevealed || v.isOpenTrump ? v.trumpSuit : null;
+    const first = trick[0];
+    const leadSuit = first.hidden || (first.faceDown && !first.isTrumpIndicator) ? null : (first.card && first.card.suit);
+    let bestIdx = -1;
+    for (let i = 0; i < trick.length; i++) {
+      const p = trick[i];
+      if (!p.card) continue;
+      if (p.faceDown && !p.isTrumpIndicator) continue;
+      if (bestIdx < 0) { bestIdx = i; continue; }
+      if (compareForAnim(p, trick[bestIdx], trump, leadSuit) > 0) bestIdx = i;
+    }
+    return bestIdx >= 0 ? trick[bestIdx].seat : null;
+  }
+  function compareForAnim(a, b, trump, lead) {
+    const RANK_ORD = { '7': 0, '8': 1, Q: 2, K: 3, '10': 4, A: 5, '9': 6, J: 7 };
+    const av = RANK_ORD[a.card.rank], bv = RANK_ORD[b.card.rank];
+    const aT = trump && a.card.suit === trump, bT = trump && b.card.suit === trump;
+    if (aT && !bT) return 1;
+    if (!aT && bT) return -1;
+    if (aT && bT) return av - bv;
+    const aL = a.card.suit === lead, bL = b.card.suit === lead;
+    if (aL && !bL) return 1;
+    if (!aL && bL) return -1;
+    if (aL && bL) return av - bv;
+    return 0;
+  }
+
   socket.on('actionError', (p) => {
     const reason = (p && p.reason) || 'Illegal action';
     toast(reason);
+    try { FX.sound.illegal(); FX.haptic.illegal(); } catch (e) {}
   });
+
+  // Detect notable state transitions to fire FX.
+  function maybePlayEventFX(prev, curr) {
+    if (!curr || !window.FX) return;
+    try {
+      // Card-played: currentTrick grew
+      const prevLen = prev && prev.currentTrick ? prev.currentTrick.length : 0;
+      const currLen = curr.currentTrick ? curr.currentTrick.length : 0;
+      if (currLen > prevLen) { FX.sound.cardPlay(); }
+      // Trick won: tricksPlayed advanced
+      if (prev && curr.tricksPlayed > (prev.tricksPlayed || 0)) {
+        FX.sound.trickWon(); FX.haptic.trickWon();
+      }
+      // New bid placed
+      const prevHighAmt = prev && prev.highBid ? prev.highBid.amount : 0;
+      const currHighAmt = curr.highBid ? curr.highBid.amount : 0;
+      if (currHighAmt > prevHighAmt) FX.sound.bidPlaced();
+      // Your turn just started
+      const prevTurn = prev ? (prev.currentPlayer === state.yourSeat || prev.currentBidder === state.yourSeat) : false;
+      const currTurn = (curr.currentPlayer === state.yourSeat) || (curr.currentBidder === state.yourSeat);
+      if (currTurn && !prevTurn) { FX.sound.yourTurn(); FX.haptic.yourTurn(); }
+      // Token transfer (hand_end)
+      if (prev && prev.phase !== 'hand_end' && curr.phase === 'hand_end') FX.sound.tokenTransfer();
+      // Game over
+      if (prev && prev.phase !== 'game_over' && curr.phase === 'game_over') {
+        FX.sound.gameOver(); FX.haptic.gameOver();
+      }
+    } catch (e) { /* never let FX break the game */ }
+  }
 
   // ---- Lobby rendering ------------------------------------------------------
   $('#leave-btn').addEventListener('click', () => {
@@ -328,6 +498,7 @@
 
   function renderHand(hand, legalIds) {
     const el = $('#your-hand');
+    const prevLen = el.querySelectorAll('.card').length;
     el.innerHTML = '';
     // Sort hand by suit then rank for stable display
     const sorted = hand.slice().sort(cardSortCompare);
@@ -338,6 +509,15 @@
         onClick: (card) => onCardTap(card, legal),
       });
       el.appendChild(cardEl);
+    }
+    // Fresh deal: if we went from 0 to 4 or 4 to 8 cards, animate.
+    if ((prevLen === 0 && sorted.length >= 4) || (prevLen === 4 && sorted.length === 8)) {
+      el.classList.remove('dealing');
+      // force reflow so the class re-triggers animation
+      void el.offsetWidth;
+      el.classList.add('dealing');
+      try { FX.sound.cardDeal(); } catch (e) {}
+      setTimeout(() => el.classList.remove('dealing'), 700);
     }
   }
 
@@ -508,6 +688,73 @@
 
   function emitAction(payload) {
     socket.emit('action', payload);
+  }
+
+  // ---- Trick history modal ----
+  const historyModal = $('#history-modal');
+  const historyBody = $('#history-body');
+  $('#history-btn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    openHistoryModal();
+  });
+  $('#history-close')?.addEventListener('click', closeHistoryModal);
+  historyModal?.addEventListener('click', (e) => {
+    if (e.target === historyModal) closeHistoryModal();
+  });
+
+  function openHistoryModal() {
+    renderHistoryBody();
+    historyModal.classList.remove('hidden');
+  }
+  function closeHistoryModal() { historyModal.classList.add('hidden'); }
+
+  function renderHistoryBody() {
+    const v = state.view;
+    historyBody.innerHTML = '';
+    const hist = (v && v.trickHistory) || [];
+    if (!hist.length) {
+      const empty = document.createElement('div');
+      empty.className = 'hint';
+      empty.textContent = 'No tricks played yet this hand.';
+      historyBody.appendChild(empty);
+      return;
+    }
+    for (const t of hist) {
+      const wrap = document.createElement('div');
+      wrap.className = 'trick-history-item';
+      const head = document.createElement('div');
+      head.className = 'trick-history-head';
+      const who = nameOfSeat(t.winnerSeat);
+      head.innerHTML =
+        '<span>Trick ' + t.index + ' &mdash; won by ' + escapeHtml(who) + '</span>' +
+        '<span class="pts">+' + displayPoints(t.points) + '</span>';
+      wrap.appendChild(head);
+      const row = document.createElement('div');
+      row.className = 'trick-history-cards';
+      for (const p of t.cards) {
+        const seatWrap = document.createElement('div');
+        seatWrap.className = 'mini-seat' + (p.seat === t.winnerSeat ? ' winner' : '');
+        const tag = document.createElement('div');
+        tag.className = 'tag';
+        tag.textContent = nameOfSeat(p.seat);
+        seatWrap.appendChild(tag);
+        const cardEl = (p.hidden || (p.faceDown && !p.card))
+          ? Cards.renderBack()
+          : (p.faceDown ? decorateFaceDown(Cards.render(p.card, { small: true })) : Cards.render(p.card, { small: true }));
+        seatWrap.appendChild(cardEl);
+        row.appendChild(seatWrap);
+      }
+      wrap.appendChild(row);
+      historyBody.appendChild(wrap);
+    }
+  }
+
+  function decorateFaceDown(el) { el.classList.add('face-down'); return el; }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>\"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[c]);
   }
 
   function renderLog(entries) {
