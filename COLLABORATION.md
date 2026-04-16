@@ -6,8 +6,12 @@
 ## Repository
 
 - Repo: `rrathip-glitch/304`
-- Active branch: **`claude/mobile-game-development-GifG7`**
-- Clone: `git clone <repo-url> && git checkout claude/mobile-game-development-GifG7`
+- Known branches (each session is assigned one via its environment prompt —
+  do not push across branches):
+  - `claude/mobile-game-development-GifG7` — primary game development line.
+  - `claude/update-documentation-eXzUL` — documentation/self-improvement line.
+- Check your assigned branch with `git branch --show-current` before you
+  commit. The environment prompt is authoritative; this list is informational.
 
 ## Project in One Paragraph
 
@@ -147,3 +151,11 @@ Next-up priority:
 - **[2026-04-16]** The user's 304 has two important house variants vs
   pagat: (1) display points are /10 of classic (J=3 not 30); (2) winning
   all 8 tricks gives **5 tokens** automatically. Don't re-derive these.
+- **[2026-04-16, doc check-in]** SOUL.md now includes (a) COLLABORATION.md
+  in its boot sequence, (b) a `node scripts/smoke.js` baseline-verify step
+  before editing engine code, and (c) a Reflection Checklist (§11) to run
+  at end-of-session. Actually run it — the compounding value of the
+  self-improvement loop depends on it.
+- **[2026-04-16, doc check-in]** Branch names were previously hardcoded in
+  SOUL.md and here. They're now replaced with "check your environment
+  prompt". Multiple branches are in play; never cross-push.

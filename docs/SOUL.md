@@ -22,12 +22,22 @@ Railway with a shareable room link. Everything else is secondary.
 Run these in order. Don't skip.
 
 1. Read this file (`docs/SOUL.md`) to the end.
-2. Read `docs/TASKS.md` — what's the current state of the project?
-3. Read `docs/ARCHITECTURE.md` — where do things live?
-4. Read `docs/RULES.md` — what game are we implementing exactly?
-5. `git status` and `git log --oneline -20` — where did the last session end?
-6. `ls src/` and `ls public/` — what modules exist?
-7. Skim `src/engine/cards.js` — the lowest-level module, anchors vocabulary.
+2. Read `COLLABORATION.md` — the orchestrator/worker protocol and the
+   "Notes to next agent" block. That block often has the single most
+   valuable piece of context for your session.
+3. Read `docs/TASKS.md` — what's the current state? Look at "Next up".
+4. Read `docs/ARCHITECTURE.md` — where do things live?
+5. Read `docs/RULES.md` — what game are we implementing exactly?
+6. `git status`, `git branch --show-current`, and `git log --oneline -20` —
+   where did the last session end, which branch are you on, are there
+   parallel branches? Your session's designated branch comes from the
+   environment prompt, not from this file (it can vary per task).
+7. `ls src/` and `ls public/` — what modules exist?
+8. Skim `src/engine/cards.js` — the lowest-level module, anchors vocabulary.
+9. **Verify baseline before you change anything.** Run
+   `node scripts/smoke.js` (or `soak.js 1`) to confirm the engine is
+   healthy. If it fails on `main`-equivalent state, that's a finding —
+   report before editing.
 
 Only then plan your session. Before acting, state in one sentence what you're
 about to change and why.
@@ -103,11 +113,16 @@ The goal: each session makes the next session start faster and safer.
 - Prefer editing existing files over creating new ones.
 
 ### Before ending
-- Commit with a clear message on branch `claude/mobile-game-development-GifG7`.
+- Commit with a clear message on the branch assigned by your environment
+  prompt (it varies per session — past sessions used
+  `claude/mobile-game-development-GifG7`; this line of work lives on
+  `claude/update-documentation-eXzUL`). Never push to a branch that
+  wasn't explicitly assigned.
 - Push with `git push -u origin <branch>`.
 - Update `docs/TASKS.md` and (if applicable) `docs/DECISIONS.md`.
 - Leave `docs/TASKS.md` in a state where "what to do next" is obvious from
   a cold read.
+- Run the **Reflection checklist** (section 11) and act on it.
 
 ## 6. Handoff Ritual
 
@@ -120,8 +135,10 @@ The last thing you do in a session, always:
    - Mark the "Next up" section explicitly.
 3. If you learned a rule, update `docs/RULES.md`.
 4. If you changed architecture, update `docs/ARCHITECTURE.md`.
-5. Push to the remote branch.
-6. If anything is *in-progress and broken*, put a `// TODO(soul):` marker in
+5. Append a one-line entry to `COLLABORATION.md` → "Notes to Next Agent"
+   with anything that would save the next instance 5+ minutes. Dated.
+6. Push to the remote branch assigned in your environment prompt.
+7. If anything is *in-progress and broken*, put a `// TODO(soul):` marker in
    the code AND describe it in `docs/TASKS.md`.
 
 ## 7. Anti-Patterns (don't repeat these)
@@ -141,6 +158,10 @@ The last thing you do in a session, always:
   first-class options.** Present 160/170/180/200/210/220/250 as suggested
   chips, allow custom entry for edge cases (see user message on betting
   conventions, 2026-04-16).
+- **Don't assume one active branch.** This project has had parallel branches
+  (`claude/mobile-game-development-GifG7`, `claude/update-documentation-eXzUL`,
+  etc.). Always check `git branch --show-current` and honor the branch in
+  your environment prompt. Never cross-push.
 
 ## 8. Current Working Agreement (from user messages)
 
@@ -172,5 +193,26 @@ You are not building a framework. You are building a game for a son to play
 with his dad. When in doubt: would this help them sit down and play tonight?
 If no, defer it.
 
-*Last revised: 2026-04-16. Revise again when your context would have wanted
-it revised.*
+## 11. Reflection Checklist (end of session)
+
+Before you push, sit with these four questions for 60 seconds. Anything you
+answer "yes" to becomes an edit to this file, `docs/TASKS.md`,
+`docs/RULES.md`, or `COLLABORATION.md`.
+
+1. **Did I have to re-derive something?** If a past instance left a note,
+   great. If not, write the note for the next instance.
+2. **Did I hit a trap the docs didn't warn me about?** → section 7
+   (Anti-Patterns) or `COLLABORATION.md`.
+3. **Did the user clarify a rule or preference I hadn't seen before?** →
+   `docs/RULES.md` (cite the message date) and section 8 (Working
+   Agreement).
+4. **If I boot a fresh instance tomorrow to continue, what's the one
+   sentence I'd want them to read first?** → top of
+   `COLLABORATION.md` → Notes to Next Agent.
+
+The protocol only compounds if you actually run this loop. Ten seconds of
+reflection now saves the next instance twenty minutes of archaeology.
+
+*Last revised: 2026-04-16 (self-improvement + soul documentation check-in;
+added COLLABORATION.md to boot, de-hardcoded branch name, added reflection
+checklist). Revise again when your context would have wanted it revised.*
