@@ -55,7 +55,31 @@
 
 ## Issues / bugs
 
-None currently open.
+Surfaced by `scripts/simulate.js` (L6 QA harness — see
+`docs/TESTING.md#headless-simulator`):
+
+1. **Engine — AI produces null action when forced to lead with only
+   trumps + indicator in a closed game, trick 1.**
+   In a closed game the trump maker may not lead a trump on trick 1, and may
+   not lead the indicator until trick 8. If their only non-indicator cards
+   are all trumps, `legalCardIds` returns `[]` and `ai.chooseAction` returns
+   `null`. The engine should either relax the first-trick-lead restriction
+   in this unreachable-otherwise case, or auto-reveal/auto-open. Reproduces
+   with `node scripts/simulate.js --seed=1 --hands=3`.
+2. **Engine — `advanceBid4` infinite-loops when the `askPartner` asker's
+   partner passes and every seat has passed but `highBid` is still set.**
+   The bidder-advancement `while` loop skips all `passedSeats`, including
+   the `highBid.bidder`, and spins forever since no one remains. Likely fix:
+   if `activeBidders` is empty but `highBid` is set, treat the high bidder
+   as the winner (enter `trump_pick1`). Reproduces with
+   `timeout 15 node scripts/simulate.js --seed=1 --hands=5` — hand 3 stalls.
+3. **Engine — `viewFor` leaks the trump maker's own face-down non-trump
+   discard after `trumpRevealed`.**
+   Per `docs/RULES.md#open-vs-closed-trump`, "Trump maker's own face-down
+   non-trump discard remains hidden even after a reveal." The current
+   `viewFor` drops the face-down masking as soon as `state.trumpRevealed`
+   is true, exposing maker's discard to other seats. The `resolveTrick`
+   reveal path preserves it correctly; the view filter should do the same.
 
 ## Notes for future sessions
 
