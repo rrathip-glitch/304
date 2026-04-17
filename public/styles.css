@@ -1011,15 +1011,19 @@ button { cursor: pointer; }
 }
 .seat-cards.vertical {
   flex-direction: column;
-  /* Fixed footprint: 8 × card-h-sm with margin-top −28 px each = 252 px.
-   * `max-height: 100%` caps if the cell is smaller on short phones
-   * (`overflow: hidden` then clips the bottom cards, but the pill
-   * above/below never moves). */
-  height: 252px;
-  max-height: 100%;
+  /* v2.2.26: stack is now GROW-SHRINK to fill whatever room is left
+   * after the fixed name / indicator / bid siblings. 252 px max keeps
+   * it from overshooting an 8-card tall stack; min 0 + overflow hidden
+   * means the bottom cards clip when the cell is short — CRITICAL,
+   * because the prior `flex: none; height: 252` caused the whole
+   * column (including the BID label) to overflow DOWN into the
+   * user's hand area whenever AI 1 or AI 3 was the trump maker
+   * (catastrophic overlap per screenshot). */
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 252px;
   width: var(--card-w-sm);
   overflow: hidden;
-  flex: none;
 }
 .seat-cards .card { width: var(--card-w-sm); height: var(--card-h-sm); margin-left: -14px; }
 .seat-cards .card:first-child { margin-left: 0; }
@@ -1093,21 +1097,21 @@ button { cursor: pointer; }
   justify-items: center;
   padding: 4px 0;
 }
+/* v2.2.26: every trick-card cell is a fixed, will-change'd frame so
+ * the grid never reflows when cards appear / disappear. The card
+ * inside the cell animates via transform only; no layout thrash. */
 .trick-card {
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   transition: transform 300ms ease, opacity 200ms ease;
-  /* When play-area is vertically squeezed (many strips stacked above),
-   * the grid cell can be shorter than --card-h-trick. Allow the cell
-   * to shrink (min-height:0) and cap the card's paint to the cell's
-   * height (max-height:100%). The card below keeps its aspect ratio
-   * via aspect-ratio + height:auto, so the rank/suit corners are
-   * never clipped by the play-area's overflow:hidden boundary. */
   min-height: 0;
   max-height: 100%;
+  width: var(--card-w-trick);
+  height: var(--card-h-trick);
   overflow: visible;
+  will-change: contents;
 }
 .trick-card.slot-top    { grid-column: 2; grid-row: 1; }
 .trick-card.slot-right  { grid-column: 3; grid-row: 2; }

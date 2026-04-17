@@ -113,6 +113,82 @@ Scopes: `docs`, `engine`, `ai`, `server`, `client`, `deploy`, `fix`, `style`.
 
 ## Current Status
 
+**v2.2.26 — Session 2026-04-17, Claude Opus 4.7 (live on Railway)**
+
+Long screenshot-driven tuning arc from v2.2.11 through v2.2.26 —
+user supplied iPhone captures after each deploy; each version
+addresses the issues visible in the prior one. A condensed log of
+what landed and why:
+
+- **v2.2.11** Flashes ~1.7× longer. bid8 enforced "one turn per seat"
+  via `bid8Acted[]`; `trump_pick2` resumes bid8 so remaining seats
+  respond. Indicator card is always face-up + playable to the caller
+  in a labelled slot; non-callers see a dedicated opp-seat indicator
+  pill that flips on reveal and disappears when played.
+- **v2.2.12** Removed the silent 2nd-turn ≥ 200 floor in bid4. AI
+  `INSPECT` delay 3.2 s / `HAND_END` delay 7.2 s so tricks + hand
+  results linger past their flashes. Token indicator became `N/22`
+  + proportional bar.
+- **v2.2.13** Header room code stopped clipping. Own-hand
+  indicator ↔ first-card overlap fixed. Opp-seat asymmetry fixed
+  (indicator moved out of `.seat-cards` into a dedicated sibling).
+- **v2.2.14** Flash queue — trump flash plays fully before the
+  hand-won flash starts. Header symmetry. Compact horizontal opp
+  indicator pill so the top seat doesn't squeeze the trick row.
+- **v2.2.15** Soft bid8 partner-lockout (only blocks at ≥ 250).
+  3-column header: tokens ↔ trump dial ↔ code/hand, with decorated
+  seat pills in the play area.
+- **v2.2.16** Removed the `askedPartner` ≥ 200 floor — asker's
+  partner can raise at any legal amount.
+- **v2.2.17** Beauty sweep — larger header text, tighter play-area
+  spacing, subtle gradient on phase/bid-strip.
+- **v2.2.18** Side seats moved to row 2 only (no row-span); the
+  inverted-U corner kissing between AI 2 and AI 1 / AI 3 is gone.
+- **v2.2.19** Symmetric 80 px side columns, locked `.team` row so
+  "11" starts at the same x for both teams, retired hand # + room
+  code in favour of a `.bid-readout` in the top right.
+- **v2.2.20** Tokens narrowed so the bar doesn't kiss the centre
+  trump dial; side-seat vertical stacks leave room for name + bid
+  pills.
+- **v2.2.21** TRUMP pill on AI 3 capped at 74 px + `overflow:hidden`
+  (used to overflow when "Trump · open" was set; now always just
+  "TRUMP"). Side name pills got a solid background + 55 % gold
+  border. Play-area pinned `flex-start` to stop drift.
+- **v2.2.22** `.play-area { overflow: visible }` — permanent fix
+  for the recurring "top edge of side pill shaved" bug. User hand
+  re-centred per user preference.
+- **v2.2.23** Bulletproof `.seat-name`: explicit 26 px height,
+  2 px gold border, `background-clip: padding-box`,
+  `transform: translateZ(0)` — kills the iOS sub-pixel rendering
+  class of bugs. Added in-game menu (⋯ → Exit room); new server
+  `leaveRoom` handler.
+- **v2.2.24** Menu button pinned fixed to bottom-right. Play surface
+  statically spaced — row 1 fixed 164 px; `.seat-top .seat-cards`
+  and `.seat-cards.vertical` got explicit dimensions. INDICATOR
+  label no longer clips on the left. Bid readout mirrors the
+  tokens column (134 px, two rows).
+- **v2.2.25** Reclaimed space above AI 2 (row 1 164 → 144 px +
+  `align-self: center`). Fixed AI 3 indicator ↔ stack ↔ bid pill
+  overlaps. Replaced "···" glyph with three explicit dot spans for
+  pixel-perfect centring. Tokens + bid readout share exact width
+  and gap (134 px, 6 px).
+- **v2.2.26** CATASTROPHIC overlap when AI 1 / AI 3 is trump maker —
+  the side stack's extra content (name + TRUMP + 8 backs + BID) was
+  overflowing row 2 DOWNWARD into the user's hand area. Root cause
+  was `.seat-cards.vertical { flex: none; height: 252px }` — the
+  stack couldn't shrink. Now `flex: 1 1 0; max-height: 252px` lets
+  the stack cap at 8 cards when room allows and shrink cleanly when
+  the cell is tight, keeping the BID pill inside row 2. Trick-card
+  cells got explicit dimensions (`width/height: card-*-trick`) +
+  `will-change: contents` so the trick grid never reflows when
+  plays come in.
+
+Verification: `scripts/layout-smoke.js` → 71 checks; `bid-test.js`
+→ 12 scenarios; `cut-test.js` → 4 scenarios; `smoke.js` + `soak.js 5`
+green.
+
+---
+
 **v2.2.12 — Session 2026-04-17, Claude Opus 4.7 (live on Railway)**
 
 Shipped in this release chain (v2.2.11 → v2.2.12):
