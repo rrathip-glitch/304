@@ -26,6 +26,43 @@ Household variant source: user messages dated 2026-04-16 (see DECISIONS.md).
   | 7    | 0       | 0        |
 - **Total in deck**: 30.4 (displayed) / 304 (internal).
 
+## Bid Display Convention *(house rule, v2.2.2)*
+
+Internal bid amounts are always multiples of 10 (160 → 300). They are
+displayed to players in a household-specific form:
+
+| Round     | Internal | Displayed as |
+|-----------|---------:|-------------:|
+| 4-card    | 160      | **60**       |
+|           | 170      | **70**       |
+|           | 180      | **80**       |
+|           | 190      | **90**       |
+|           | 200      | **100**      |
+|           | 210      | **110**      |
+|           | 220      | **120**      |
+|           | 230      | **130**      |
+|           | 240      | **140**      |
+| 8-card    | 250      | **250**      |
+|           | 260      | **260**      |
+|           | 270      | **270**      |
+|           | 280      | **280**      |
+|           | 290      | **290**      |
+|           | 300      | **300**      |
+
+**Rule:** for internal values in `[160, 250)`, subtract 100 for display.
+For internal values `≥ 250`, show the full value.
+
+The transition at **250** is deliberate — it marks the boundary between
+the normal 4-card range and the 8-card (high-stakes) range. Calling a
+bid as "sixty" / "hundred" / "140" is quicker in table talk; once the
+stake jumps to the 8-card level, the full three-digit number
+communicates the commitment weight.
+
+This is display-only. Every engine check (floor, minimum, comparisons,
+scoring) uses the internal value unchanged.
+
+---
+
 ## Players, Teams, Direction
 
 - 4 players, 2 teams of 2. Partners sit **opposite** (seats 0+2 vs 1+3).

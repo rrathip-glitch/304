@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="theme-color" content="#0d4a2b">
   <title>304 — card game</title>
-  <link rel="stylesheet" href="styles.css?v=2.2.1">
+  <link rel="stylesheet" href="styles.css?v=2.2.2">
 </head>
 <body>
   <div id="app" class="screen-landing">
@@ -32,7 +32,7 @@
           <input id="code-input" type="text" maxlength="6" autocomplete="off" placeholder="ABC123" />
         </label>
         <button id="join-btn" class="btn">Join room</button>
-        <div class="build-marker" id="build-marker">v2.2.1 — tap for diagnostics</div>
+        <div class="build-marker" id="build-marker">v2.2.2 — tap for diagnostics</div>
       </div>
     </section>
 
@@ -133,7 +133,7 @@
 
   <!-- Debug overlay: tap the build marker to toggle. Off by default. -->
   <div id="debug-overlay" class="debug-overlay hidden">
-    <div class="debug-row">build: <b id="dbg-build">2.2.1</b></div>
+    <div class="debug-row">build: <b id="dbg-build">2.2.2</b></div>
     <div class="debug-row">socket: <b id="dbg-sock">-</b></div>
     <div class="debug-row">gate: <b id="dbg-gate">-</b></div>
     <div class="debug-row">queued: <b id="dbg-pending">0</b></div>
@@ -143,7 +143,7 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="cards.js?v=2.2.1"></script>
-  <script src="client.js?v=2.2.1"></script>
+  <script src="cards.js?v=2.2.2"></script>
+  <script src="client.js?v=2.2.2"></script>
 </body>
 </html>

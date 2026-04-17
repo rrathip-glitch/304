@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.1';
+  const BUILD = '2.2.2';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -864,11 +864,20 @@
   }
 
   // ---- Helpers --------------------------------------------------------------
-  // Internal bid amounts are integer multiples of 10; display is /10.
+  // Bid display convention (household variant, v2.2.2):
+  //   160–240 (the 4-card range)   →   internal − 100   (so 160→"60",
+  //                                    200→"100", 240→"140")
+  //   250 and above (the 8-card range)   →   internal unchanged (250,
+  //                                    260, …, 300)
+  // Engine math is unchanged — bids stay integer multiples of 10
+  // internally. This is a pure UI relabel so the chips read like the
+  // spoken call at the table; the "system changes at 250" matches the
+  // round boundary, signaling that any bid above 240 is a commitment
+  // to the second-round (8-card) stake level.
   function displayBid(internal) {
     if (internal == null) return '';
-    const n = internal / 10;
-    return (internal % 10 === 0) ? String(n) : n.toFixed(1);
+    if (internal >= 160 && internal < 250) return String(internal - 100);
+    return String(internal);
   }
 
   function displayPoints(internal) {

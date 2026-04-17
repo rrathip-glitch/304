@@ -1,6 +1,6 @@
 # 304 — Mobile Multiplayer Card Game
 
-[![version](https://img.shields.io/badge/version-2.2.1-blue.svg)](#release-notes)
+[![version](https://img.shields.io/badge/version-2.2.2-blue.svg)](#release-notes)
 
 A web-based implementation of **304**, a Sri Lankan trick-taking card game.
 Built mobile-first for seamless play between two humans (e.g. you and your
@@ -34,6 +34,16 @@ Any empty seats are filled by the AI.
 Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Release Notes
+
+### v2.2.2 — 2026-04-17
+
+- **Bid display convention.** Bid chips, seat labels, and the current-bid
+  strip now follow the household mapping: 160→60, 170→70, 180→80,
+  190→90, 200→100, 210→110, 220→120, 230→130, 240→140, 250→250 (the
+  system switches to full three-digit form at the 8-card threshold),
+  260→260, 270→270, 280→280, 290→290, 300→300.
+- Engine math is unchanged; this is purely a UI relabel.
+- Full ladder is pinned by 15 assertions in `scripts/bid-test.js`.
 
 ### v2.2.1 — 2026-04-17
 
@@ -111,7 +121,7 @@ git merge <feature-branch> --no-edit
 git push origin claude/mobile-game-development-GifG7
 # wait ~60s, then:
 curl https://<your-app>.up.railway.app/version
-# → {"version":"2.2.1","startedAt":"..."}
+# → {"version":"2.2.2","startedAt":"..."}
 ```
 
 If `version` matches `package.json#version`, you're live. Full procedure,

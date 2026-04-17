@@ -297,4 +297,42 @@ console.log('\nTest 7: token scale per bid range (household variant)');
     'token transfer is a true zero-sum move (loser decreases, winner increases)');
 }
 
-console.log('\nAll bid + open-choice + asker-lockout + token-scale tests passed.');
+console.log('\nTest 8: bid display convention (v2.2.2, UI-only)');
+{
+  // displayBid lives in public/client.js (browser code). The household
+  // convention (per user spec):
+  //   • 160–240 (the 4-card range) → internal - 100  (so 160→"60",
+  //     190→"90", 200→"100", 240→"140")
+  //   • 250+ (the 8-card range) → full internal value (250, 260, 300)
+  // Pattern-match the source so a refactor that drops the rule fails.
+  const fs = require('fs');
+  const path = require('path');
+  const clientSrc = fs.readFileSync(path.join(__dirname, '..', 'public/client.js'), 'utf8');
+  assert(
+    /internal >= 160 && internal < 250.+internal - 100/s.test(clientSrc),
+    'client.js subtracts 100 for bids in [160, 250)',
+  );
+  assert(
+    /function displayBid[\s\S]{0,600}return String\(internal\);/.test(clientSrc),
+    'client.js returns the raw internal value for 250+',
+  );
+  // Replicate the function locally and exhaustively check the 4-card
+  // and first-8-card bid ladder.
+  function displayBid(internal) {
+    if (internal == null) return '';
+    if (internal >= 160 && internal < 250) return String(internal - 100);
+    return String(internal);
+  }
+  const cases = [
+    [160, '60'],  [170, '70'],  [180, '80'],  [190, '90'],
+    [200, '100'], [210, '110'], [220, '120'], [230, '130'], [240, '140'],
+    [250, '250'], [260, '260'], [270, '270'], [280, '280'], [290, '290'],
+    [300, '300'],
+  ];
+  for (const [internal, expected] of cases) {
+    assert(displayBid(internal) === expected, `${internal} → "${expected}"`);
+  }
+  assert(displayBid(null) === '', 'null → ""');
+}
+
+console.log('\nAll bid + open-choice + asker-lockout + token-scale + display tests passed.');

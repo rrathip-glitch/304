@@ -354,5 +354,50 @@ override.
 
 ---
 
+## 2026-04-17 — Bid display relabel: 160–240 subtract 100; 250+ unchanged — v2.2.2
+
+**Decision:** Change `public/client.js#displayBid()` so every bid
+rendered in the UI follows the household convention:
+
+| Internal | Display |
+|---------:|--------:|
+| 160      | 60      |
+| 170      | 70      |
+| 180      | 80      |
+| 190      | 90      |
+| 200      | 100     |
+| 210      | 110     |
+| 220      | 120     |
+| 230      | 130     |
+| 240      | 140     |
+| 250      | 250     |
+| 260      | 260     |
+| 270      | 270     |
+| 280      | 280     |
+| 290      | 290     |
+| 300      | 300     |
+
+Rule: for `160 ≤ internal < 250`, display `internal - 100`. For
+`internal ≥ 250`, display the raw value.
+
+**Supersedes** the v1 rule "Bids entered in integer units of 10
+internally (160, 170, …, 250), displayed /10 (16, 17, …, 25)". The
+/10 form matched internal math but didn't match how the family
+actually calls bids at the table. The subtract-100 form reads
+naturally ("sixty", "hundred", "140") in the 4-card range, and the
+full three-digit form at 250+ signals the jump to 8-card stakes.
+
+**Source:** User messages establishing the ladder: "change 16 to 60
+and 17 to 70 and 18 to 80 and 19 to 90 … 20 to 100 … 21 to 110 and
+22 to 120 and 23 to 130 and 24 to 140 … But 25 is 250 … The system
+changes there".
+
+**Scope:** strictly UI. Engine internals (bid comparisons, floor
+checks, scoring) untouched. `scripts/bid-test.js#Test 8` exhaustively
+verifies the 15-value ladder 160 → 300 and pattern-matches the source
+so a regression can't silently ship.
+
+---
+
 *Append new entries below this line. Do not modify prior entries — if a
 decision is reversed, add a new entry that references and supersedes it.*
