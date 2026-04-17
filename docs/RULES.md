@@ -143,8 +143,9 @@ scoring) uses the internal value unchanged.
   engine also rejects the action defensively with
   `"cannot bid over your partner"`.
 - **Ask-partner-to-bid**: at your turn, you may ask your partner to bid
-  in your place. This counts as a turn for both players. After this,
-  neither of you may bid <200.
+  in your place. This counts as a turn for both players. No bid floor
+  is imposed by the ask (v2.2.16 removed the 200-floor coupling); the
+  partner can raise at any legal amount.
   - *(House rule, v2.2.1)* **The asker is locked out of bidding for
     the rest of the round** — they've delegated the call.
   - *(House rule, v2.2.3)* **Asking counts as the asker's pass.** They

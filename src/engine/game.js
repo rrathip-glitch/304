@@ -47,7 +47,9 @@ function createGame(roomId = '') {
     // Per-seat "I am the one who called askPartner this round." The
     // asker's only action for the rest of the round is pass — they've
     // delegated the bid to their partner. Distinct from askedPartner[]
-    // (which is symmetric and only controls the ≥200 floor).
+    // which is symmetric (flagged on both ask sides, kept for log
+    // display and legacy dedup of repeated asks). As of v2.2.16 it no
+    // longer raises a bid floor.
     isAsker: [false, false, false, false],
     bid8Turns: 0,
     // v2.2.11: per-seat "has acted in bid8". The 8-card round is strictly
@@ -145,16 +147,16 @@ function dealSecondBatch(state) {
   state.pendingSecondBatch = null;
 }
 
-function minAllowedBid(state, seat) {
-  // v2.2.12: removed the "2nd-turn ≥ 200" floor. Household rule is
-  // simpler — on any turn you may bid ANY legal amount above the
-  // current high by 10+. The previous floor surfaced as a bug in the
-  // user screenshot: AI bid 70, user couldn't counter with 80 because
-  // they'd passed once and had been silently bumped to a 200 floor.
-  // The askedPartner floor (≥200 after a partner-ask) remains — that
-  // one is a deliberate commitment by both partners.
-  const askedHere = state.askedPartner[seat];
-  return askedHere ? 200 : 160;
+function minAllowedBid(state /* , seat */) {
+  // v2.2.16: all conditional floors removed. Every seat's minimum in
+  // bid4 is the global floor (160); the +10 minimum-raise rule is
+  // applied in bidAmountsLegal via Math.max(floor, highBid+10). The
+  // askedPartner 200-floor was the last remaining bump — it silently
+  // dropped 70/80/90 (170/180/190 internal) from the asker's partner's
+  // chip list even though those were mathematically legal raises.
+  // Screenshot bug: AI 3 bid 60, partner asked, user saw chips start
+  // at 100 (200) instead of 70 (170). Removed.
+  return 160;
 }
 
 // Partner-is-high lockout (v2.2.7): if your partner is the current high
@@ -254,10 +256,8 @@ function handleBid4(state, seat, action) {
     if (state.highBid && state.highBid.bidder === seat) return fail('you are already the high bidder');
     // House rule (v2.2.1): once you've asked your partner to bid, you've
     // delegated the call — you can only pass for the rest of this round.
-    // The partner can bid freely (subject to the ≥200 floor from the
-    // askedPartner[] flag). Without this rule, a player could ask partner
-    // to bid and then outbid the partner's own raise on their next turn,
-    // which breaks the "I pass the call" social contract of askPartner.
+    // The partner can bid freely at any legal amount (v2.2.16 removed
+    // the old ≥200 ask-partner coupling).
     if (state.isAsker[seat]) return fail('you asked partner to bid — you can only pass this round');
     // House rule (v2.2.7): you cannot bid while your partner is the
     // current high bidder. Pass is your only action. Was previously

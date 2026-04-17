@@ -182,7 +182,8 @@ Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 - **Asker lockout.** If you ask your partner to bid, you're locked out
   of bidding for the rest of that round — your only action is pass.
-  Your partner can bid freely (subject to the standard ≥200 floor).
+  Your partner can bid freely at any legal amount (v2.2.16: the old
+  ≥200 ask-partner floor was removed).
 - **Token table locked in with tests.** The household variant's scoring
   (160–199 = 1/2, 200–249 = 2/3, 250+ = 3/4, all-8 = 5) now has
   regression assertions pinning it in `scripts/bid-test.js`.
