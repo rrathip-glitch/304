@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.7';
+  const BUILD = '2.2.8';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -142,6 +142,107 @@
     hand_end: 'Hand complete',
     game_over: 'Game over',
   };
+
+  // ---- Flash overlay (v2.2.8) ----------------------------------------------
+  // Shows a brief centered banner when a trump reveal or a trick-won
+  // transition is detected in a new view. Two timers:
+  //   • trump reveal → 2 000 ms
+  //   • trick won    → 1 300 ms
+  // Triggered from renderTable BEFORE state.view is swapped, so we can
+  // compare the incoming view against the tracked baselines below.
+  let prevTrumpOpen = null;      // null = baseline not yet set
+  let prevTricksPlayed = null;
+  let flashTimer = null;
+  const SUIT_GLYPH = { S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' };
+  const SUIT_FULL = { S: 'Spades', H: 'Hearts', D: 'Diamonds', C: 'Clubs' };
+
+  function showFlash(opts) {
+    const el = document.getElementById('flash-overlay');
+    if (!el) return;
+    // Reset any in-flight flash cleanly before starting the next.
+    if (flashTimer) { clearTimeout(flashTimer); flashTimer = null; }
+    el.className = 'flash-overlay hidden';
+    el.innerHTML = '';
+
+    const card = document.createElement('div');
+    card.className = 'flash-card';
+    if (opts.kind === 'trump') {
+      el.classList.add('trump');
+      const suit = document.createElement('span');
+      const isRed = opts.suit === 'H' || opts.suit === 'D';
+      suit.className = 'flash-suit color-' + (isRed ? 'red' : 'black');
+      suit.textContent = SUIT_GLYPH[opts.suit] || '?';
+      card.appendChild(suit);
+      const text = document.createElement('span');
+      text.className = 'flash-text';
+      text.textContent = 'Trump is ' + (SUIT_FULL[opts.suit] || opts.suit);
+      card.appendChild(text);
+    } else if (opts.kind === 'trick') {
+      el.classList.add(opts.us ? 'trick-us' : 'trick-them');
+      const heading = document.createElement('span');
+      heading.className = 'flash-heading';
+      heading.textContent = 'Trick';
+      card.appendChild(heading);
+      const text = document.createElement('span');
+      text.className = 'flash-text';
+      text.textContent = opts.us ? 'Won by us' : 'Won by them';
+      card.appendChild(text);
+    }
+    el.appendChild(card);
+    el.classList.remove('hidden');
+    // requestAnimationFrame ensures the transition from .hidden → .visible
+    // actually animates instead of being collapsed by the browser.
+    requestAnimationFrame(() => el.classList.add('visible'));
+
+    const duration = opts.kind === 'trump' ? 2000 : 1300;
+    flashTimer = setTimeout(() => {
+      el.classList.remove('visible');
+      setTimeout(() => {
+        el.classList.add('hidden');
+        el.className = 'flash-overlay hidden';
+        el.innerHTML = '';
+      }, 280);
+    }, duration);
+  }
+
+  function maybeFlashEvents(v) {
+    if (!v) return;
+    const trumpOpen = !!(v.isOpenTrump || v.trumpRevealed);
+    // Baseline the first view we get so we never flash on initial load
+    // or on reconnect mid-hand.
+    if (prevTrumpOpen === null) prevTrumpOpen = trumpOpen;
+    else if (trumpOpen && !prevTrumpOpen && v.trumpSuit) {
+      showFlash({ kind: 'trump', suit: v.trumpSuit });
+    }
+    prevTrumpOpen = trumpOpen;
+
+    const tp = v.tricksPlayed || 0;
+    if (prevTricksPlayed === null) prevTricksPlayed = tp;
+    else if (tp > prevTricksPlayed && v.trickLeader != null && state.yourSeat != null) {
+      const yourTeam = state.yourSeat % 2;
+      const winnerTeam = v.trickLeader % 2;
+      // Suppress the trick-won flash on the same frame as a trump reveal
+      // so the two don't collide; the trump flash is more informative.
+      if (!(trumpOpen && !prevTrumpOpen && v.cutResolved)) {
+        showFlash({ kind: 'trick', us: winnerTeam === yourTeam });
+      }
+    }
+    prevTricksPlayed = tp;
+  }
+
+  // Reset the flash baselines when a new hand starts so we re-flash the
+  // next hand's trump reveal and trick wins. Called from renderTable.
+  function resetFlashBaselinesIfHandChanged(v) {
+    if (!v) return;
+    const handKey = (v.handNumber || 0) + ':' + (v.phase === 'hand_end' ? 'end' : 'live');
+    if (resetFlashBaselinesIfHandChanged._lastHandKey !== handKey &&
+        (v.phase === 'bid4' || v.phase === 'waiting')) {
+      // Entered a fresh hand's bidding — re-baseline so next reveal fires.
+      prevTrumpOpen = false;
+      prevTricksPlayed = 0;
+    }
+    resetFlashBaselinesIfHandChanged._lastHandKey = handKey;
+  }
 
   // ---- DOM lookups ----------------------------------------------------------
   const $ = (sel) => document.querySelector(sel);
@@ -295,8 +396,14 @@
   socket.on('view', (payload) => {
     const view = payload && payload.view ? payload.view : payload;
     dbg('view phase=' + (view && view.phase));
-    state.view = view;
+    // Reset the trump/trick-flash baselines if a new hand has started
+    // (so we flash again next hand), then detect event transitions
+    // against the incoming view. Both must happen BEFORE state.view is
+    // swapped so the baseline comparisons are meaningful.
+    resetFlashBaselinesIfHandChanged(view);
     if (view && typeof view.yourSeat === 'number') state.yourSeat = view.yourSeat;
+    maybeFlashEvents(view);
+    state.view = view;
     if (view && view.roomId) state.roomId = view.roomId;
     saveSession();
     // A view always clears any pending Start Game spinner.

@@ -1,6 +1,6 @@
 # 304 — Mobile Multiplayer Card Game
 
-[![version](https://img.shields.io/badge/version-2.2.7-blue.svg)](#release-notes)
+[![version](https://img.shields.io/badge/version-2.2.8-blue.svg)](#release-notes)
 
 A web-based implementation of **304**, a Sri Lankan trick-taking card game.
 Built mobile-first for seamless play between two humans (e.g. you and your
@@ -34,6 +34,25 @@ Any empty seats are filled by the AI.
 Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Release Notes
+
+### v2.2.8 — 2026-04-17
+
+- **Trick-card bottom-clip fix (round two).** The v2.2.7 indicator
+  strip pushed the play-area into a tighter vertical budget, and
+  `.play-area { overflow: hidden }` was clipping the slot-bottom
+  trick card's mirrored corner. `.trick-card` now caps at 100% of
+  its cell and the card inside carries `aspect-ratio: 1 / 1.4` so it
+  downscales gracefully instead of clipping. The indicator strip
+  itself was also compacted (smaller padding + card thumb) to give
+  the trick cells ~24 px more room.
+- **Trump-reveal flash.** When trump is revealed (cut-reveal, auto-
+  open after trick 1 on a 250+ bid, or an explicit open declaration),
+  a centered banner flashes for ~2 s with the big suit glyph and
+  "Trump is ♠ Spades". Pointer-events off so it never blocks a tap.
+- **Trick-won flash.** A shorter 1.3 s flash after each trick resolves,
+  green "Won by us" or red "Won by them" from the viewer's
+  perspective. Suppressed on the same frame as a trump reveal so the
+  two don't collide.
 
 ### v2.2.7 — 2026-04-17
 
