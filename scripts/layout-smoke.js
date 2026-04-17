@@ -61,8 +61,8 @@ assert(
   'card width uses clamp() for screen-size-agnostic scaling',
 );
 assert(
-  /\.seat-cards\.vertical[\s\S]*?max-height:\s*calc\(100% - 70px\)/.test(css),
-  'side opponent vertical stacks cap leaves room for name + bid pills (v2.2.20)',
+  /\.seat-cards\.vertical[\s\S]*?height:\s*252px[\s\S]*?max-height:\s*100%/.test(css),
+  'side opponent vertical stacks are statically sized (v2.2.24: 252 px, caps at cell)',
 );
 assert(
   /overflow-x:\s*hidden/.test(css),
@@ -89,14 +89,14 @@ assert(
 const html = read('public/index.html');
 assert(/id="your-hand"/.test(html), 'index.html has the player hand slot (v2.2.10 also hosts the inline indicator)');
 assert(/id="phase-banner"/.test(html), 'index.html has the phase banner');
-assert(/v=2\.2\.23/.test(html), 'index.html uses semver cache-bust marker (v2.2.23)');
+assert(/v=2\.2\.24/.test(html), 'index.html uses semver cache-bust marker (v2.2.24)');
 assert(/id="bid-readout"/.test(html), 'index.html has the header bid-readout (v2.2.19 replaces the bid-strip)');
 
 // -- Client behavior checks (parse client.js for the expected hooks) -------
 const client = read('public/client.js');
 assert(
-  /BUILD\s*=\s*'2\.2\.23'/.test(client),
-  'client.js declares BUILD = "2.2.23" (semver, not codename)',
+  /BUILD\s*=\s*'2\.2\.24'/.test(client),
+  'client.js declares BUILD = "2.2.24" (semver, not codename)',
 );
 assert(
   /isTappable\s*=\s*legalIds\.has\(indicatorCard\.id\)/.test(client),

@@ -593,54 +593,60 @@ button { cursor: pointer; }
   align-items: center;
   justify-content: flex-end;
   flex-shrink: 0;
-  min-width: 0;
+  min-width: 134px;          /* v2.2.24: mirror of .tokens width */
   line-height: 1.05;
 }
+/* v2.2.24: bid readout is now a mirror of the left-side tokens —
+ * same 134 px footprint, two rows of content, same vertical rhythm.
+ *   row 1: eyebrow "Current bid" / "This hand"
+ *   row 2: <value>  <by name>   (value on the right so the number
+ *          anchors to the same right edge as the tokens' progress
+ *          bar — the two widgets read as symmetric bookends). */
 .bid-readout {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-  padding: 4px 10px 4px 12px;
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.25) 100%);
-  border: 1px solid rgba(230, 200, 106, 0.22);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.35);
-  min-width: 66px;
-  transition: border-color 240ms ease, box-shadow 240ms ease;
+  gap: 4px;
+  width: 134px;
+  padding: 2px 0;
+  box-sizing: border-box;
+  transition: opacity 240ms ease;
+  opacity: 0;
+  pointer-events: none;
 }
-.bid-readout:empty,
-.bid-readout:not(.active) {
-  visibility: hidden;
-}
-.bid-readout.active {
-  border-color: rgba(230, 200, 106, 0.5);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(230, 200, 106, 0.08);
-}
-.bid-readout .bid-readout-label {
-  font-size: 9px;
-  letter-spacing: 1.4px;
+.bid-readout.active { opacity: 1; }
+.bid-readout .bid-readout-eyebrow {
+  font-size: 11px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--cream-dim);
   font-weight: 700;
   line-height: 1;
+  text-align: right;
+}
+.bid-readout .bid-readout-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  line-height: 1;
+  white-space: nowrap;
 }
 .bid-readout .bid-readout-value {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
   color: var(--gold);
   font-variant-numeric: tabular-nums;
   line-height: 1;
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 .bid-readout .bid-readout-bidder {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--cream-dim);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.3px;
-  max-width: 120px;
+  max-width: 80px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -771,13 +777,20 @@ button { cursor: pointer; }
   flex: 0 0 auto;
   /* v2.2.13: bumped from 24px → 36px to prevent the first regular card's
    * gold-ring legal-glow from bleeding into the indicator's right edge.
-   * Screenshot confirmed the 24px gap wasn't enough once both the
-   * indicator AND the next card were tappable-legal at the same time. */
+   * v2.2.24: adds left margin so the badge above the card doesn't get
+   * clipped by .your-hand's left edge when the hand is first in its
+   * row (e.g., during bidding before any plays). */
   margin-right: 36px;
+  margin-left: 10px;
   /* Leave room for the badge above the card. */
-  padding-top: 14px;
+  padding-top: 16px;
   position: relative;
-  z-index: 1;
+  z-index: 2;
+}
+.indicator-slot .indicator-badge {
+  /* v2.2.24: cap so a wide badge ("Indicator · open") doesn't push off
+   * the left edge of the hand container. */
+  max-width: calc(var(--card-w) + 18px);
 }
 .indicator-slot .indicator-badge {
   position: absolute;
@@ -889,24 +902,16 @@ button { cursor: pointer; }
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  /* v2.2.19: side columns are symmetric 80 px each — column 2 sits at
-   * the true horizontal center of the play-area. Label pills (AI 1,
-   * PASS, BID 100, TRUMP) needed more width than the previous 54 px
-   * minmax; 80 px leaves just enough room for the widest ("BID 100")
-   * and the top 8-card stack still fits the 1fr remainder on a
-   * 375 px (iPhone SE) viewport. */
   grid-template-columns: 80px 1fr 80px;
-  grid-template-rows: minmax(76px, auto) 1fr;
+  /* v2.2.24: row 1 is now a FIXED 164 px — enough to hold AI 2 as a
+   * trump maker (name + TRUMP indicator pill + 8-card back stack +
+   * bid pill). Prior `minmax(76px, auto)` caused the whole play area
+   * to jump every time AI 2 became trump maker (or stopped being
+   * one) because row 1 would grow/shrink. With a fixed height
+   * nothing on the surface shifts round to round. */
+  grid-template-rows: 164px 1fr;
   gap: 10px 6px;
   padding: 10px;
-  /* v2.2.22: overflow flipped to visible — the prior `hidden` was
-   * the root cause of recurring "label clipped at top" reports (the
-   * seat name pill's thin gold border sat right against the cell's
-   * implicit clip boundary, so the top edge got shaved at certain
-   * pill positions). Internal stacks still self-cap via
-   * `.seat-cards.vertical { overflow: hidden }`, and the parent
-   * `#app.screen-table` retains `overflow: hidden` so the page as
-   * a whole never scrolls. */
   overflow: visible;
 }
 .seat-slot { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 0; min-height: 0; overflow: visible; }
@@ -984,24 +989,33 @@ button { cursor: pointer; }
   display: flex;
   gap: 2px;
   align-items: center;
-  /* v2.2.22: re-centered (was flex-start in v2.2.21) so back stacks
-   * stay visually balanced inside their seat-slot. Matches the
-   * user-hand centering. */
+  /* v2.2.24: back stacks are STATICALLY SIZED — they reserve the full
+   * footprint of an 8-card stack (~222 px horizontal / 252 px vertical)
+   * so the stack never shrinks when cards are played. Cards inside
+   * center-align so remaining cards stay visually balanced within the
+   * fixed frame. This kills the "play area jumps between rounds" class
+   * of reports. */
   justify-content: center;
   min-height: 0;
   min-width: 0;
 }
+.seat-top .seat-cards,
+#seat-top .seat-cards {
+  width: 222px;
+  height: var(--card-h-sm);
+  flex: none;
+}
 .seat-cards.vertical {
   flex-direction: column;
-  /* v2.2.20: cap accounts for BOTH the name pill (32 px = 26 + 6 mt)
-   * AND the bid pill (30 px = 24 + 6 mt) + a few px buffer — previously
-   * only subtracted ~28 px, so on dense stacks the bid pill at the
-   * bottom got pushed past the cell and clipped by .play-area's
-   * overflow:hidden. The cards themselves still use a tight negative
-   * margin-top to fit visually. */
-  max-height: calc(100% - 70px);
+  /* Fixed footprint: 8 × card-h-sm with margin-top −28 px each = 252 px.
+   * `max-height: 100%` caps if the cell is smaller on short phones
+   * (`overflow: hidden` then clips the bottom cards, but the pill
+   * above/below never moves). */
+  height: 252px;
+  max-height: 100%;
+  width: var(--card-w-sm);
   overflow: hidden;
-  flex: 0 1 auto;
+  flex: none;
 }
 .seat-cards .card { width: var(--card-w-sm); height: var(--card-h-sm); margin-left: -14px; }
 .seat-cards .card:first-child { margin-left: 0; }
@@ -1275,43 +1289,54 @@ button { cursor: pointer; }
   position: relative;
 }
 
-/* v2.2.23: in-game menu button + popup. Button is anchored to the
- * bottom-right corner of the action bar; popup appears above it,
- * styled to match the header theme. */
+/* v2.2.24: menu button pinned to the bottom-right of the viewport so
+ * it never shifts as the action bar content changes shape. Sits on
+ * the log-line height (matches the 22–28 px log header) visually.
+ * Dots centered via inline-flex + explicit line-height. */
 .menu-btn {
-  position: absolute;
-  right: 10px;
-  top: 6px;
-  width: 34px;
-  height: 34px;
+  position: fixed;
+  right: calc(14px + var(--safe-right));
+  bottom: calc(14px + var(--safe-bottom));
+  width: 36px;
+  height: 36px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.3) 100%);
-  border: 1px solid rgba(230, 200, 106, 0.35);
+  background: linear-gradient(180deg, rgba(10,24,16,0.96) 0%, rgba(4,12,8,0.92) 100%);
+  border: 1.5px solid rgba(230, 200, 106, 0.5);
   color: var(--cream);
+  font-size: 0;                         /* kill inherited font size; dots own it */
+  line-height: 1;
+  letter-spacing: 0;
+  font-weight: 700;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.55);
+  cursor: pointer;
+  z-index: 130;
+}
+.menu-btn .menu-btn-dots {
+  display: block;
   font-size: 22px;
   line-height: 1;
-  letter-spacing: 2px;
-  font-weight: 700;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.45);
-  cursor: pointer;
-  z-index: 20;
+  letter-spacing: 1px;
+  transform: translateY(-6px);          /* optical centre for the "···" glyph */
+  color: var(--gold);
+  font-weight: 800;
+  font-family: -apple-system, system-ui, "Helvetica Neue", sans-serif;
 }
 .menu-btn:active { transform: scale(0.95); }
 .menu-popup {
   position: fixed;
-  right: 16px;
-  bottom: calc(76px + var(--safe-bottom));
+  right: calc(14px + var(--safe-right));
+  bottom: calc(58px + var(--safe-bottom));
   z-index: 140;
   min-width: 180px;
   padding: 6px;
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(8,18,12,0.96) 0%, rgba(4,10,7,0.94) 100%);
-  border: 1px solid rgba(230, 200, 106, 0.45);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+  background: linear-gradient(180deg, rgba(8,18,12,0.97) 0%, rgba(4,10,7,0.95) 100%);
+  border: 1px solid rgba(230, 200, 106, 0.5);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.65);
   display: flex;
   flex-direction: column;
   gap: 4px;

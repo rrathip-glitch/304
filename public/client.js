@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.23';
+  const BUILD = '2.2.24';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -838,6 +838,9 @@
   // cluster. Styling follows the header rhythm: a small "BID" eyebrow,
   // the displayBid value in large gold, and "by <name>" underneath in
   // muted small caps. Empty (collapsed) when no bid has landed yet.
+  // v2.2.24: bid readout now mirrors the tokens column on the left —
+  // two rows, 134 px total. Row 1 is the eyebrow label, row 2 puts the
+  // numeric value and the "by …" bidder side-by-side on a single line.
   function renderBidStrip(v) {
     const el = document.getElementById('bid-readout');
     if (!el) return;
@@ -846,23 +849,28 @@
     if (!v || !v.highBid) return;
     el.classList.add('active');
 
-    const label = document.createElement('span');
-    label.className = 'bid-readout-label';
-    label.textContent = (v.phase === 'play' || v.phase === 'inspect' || v.phase === 'hand_end')
+    const eyebrow = document.createElement('div');
+    eyebrow.className = 'bid-readout-eyebrow';
+    eyebrow.textContent = (v.phase === 'play' || v.phase === 'inspect' || v.phase === 'hand_end')
       ? 'This hand'
       : 'Current bid';
-    el.appendChild(label);
+    el.appendChild(eyebrow);
+
+    const main = document.createElement('div');
+    main.className = 'bid-readout-main';
 
     const value = document.createElement('span');
     value.className = 'bid-readout-value';
     value.textContent = displayBid(v.highBid.amount);
-    el.appendChild(value);
+    main.appendChild(value);
 
     const bidder = document.createElement('span');
     bidder.className = 'bid-readout-bidder';
     const youAreBidder = v.highBid.bidder === state.yourSeat;
     bidder.textContent = 'by ' + (youAreBidder ? 'you' : nameOfSeat(v.highBid.bidder));
-    el.appendChild(bidder);
+    main.appendChild(bidder);
+
+    el.appendChild(main);
   }
 
   function nameOfSeat(seat) {
