@@ -456,22 +456,25 @@ button { cursor: pointer; }
 /* ============ Table ============ */
 #app.screen-table #table { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 /* v2.2.15: 3-column header — tokens left | trump dial center | hand+code right.
- * Sides auto-size to content; the dial is absolutely anchored to the
- * center of the header so the left/right sizes don't tug it off-axis. */
+ * v2.2.17: beauty sweep. Header taller (52 px) to accommodate larger,
+ * readable right-side labels; room code bumped to 16 px gold bold;
+ * hand # paired at 11 px muted. Both sides of the header now share
+ * a roughly matching visual weight so the trump dial sits at a
+ * true optical center. */
 .table-head {
   position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 14px;
+  padding: 10px 16px;
   background:
-    linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 100%),
-    radial-gradient(ellipse at center, rgba(230,200,106,0.05) 0%, transparent 60%);
-  border-bottom: 1px solid rgba(230, 200, 106, 0.18);
-  min-height: 46px;
+    linear-gradient(180deg, rgba(0,0,0,0.58) 0%, rgba(0,0,0,0.28) 100%),
+    radial-gradient(ellipse at center, rgba(230,200,106,0.06) 0%, transparent 60%);
+  border-bottom: 1px solid rgba(230, 200, 106, 0.22);
+  min-height: 54px;
   flex-shrink: 0;
-  gap: 10px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 .tokens {
   display: flex;
@@ -481,14 +484,14 @@ button { cursor: pointer; }
   min-width: 0;
   flex-shrink: 1;
 }
-.team { display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+.team { display: flex; align-items: center; gap: 7px; font-size: 13px; white-space: nowrap; }
 .team .label {
   color: var(--cream-dim);
   text-transform: uppercase;
-  letter-spacing: 1.5px;
-  font-size: 9px;
+  letter-spacing: 1.6px;
+  font-size: 11px;
   font-weight: 700;
-  min-width: 28px;
+  min-width: 32px;
 }
 .team-0 .label { color: var(--gold); }
 .team-1 .label { color: #d9b8b8; }
@@ -504,7 +507,7 @@ button { cursor: pointer; }
   min-width: 68px;
 }
 .pips .pips-num {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -512,7 +515,7 @@ button { cursor: pointer; }
   text-shadow: 0 1px 2px rgba(0,0,0,0.45);
 }
 .pips .pips-of {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--muted);
   margin-right: 3px;
   font-variant-numeric: tabular-nums;
@@ -560,15 +563,15 @@ button { cursor: pointer; }
 /* Legacy `.pip` class kept as a no-op for any stale markup (e.g.
  * a pre-v2.2.12 cached client); hidden so the old dots don't leak. */
 .pip { display: none; }
-/* v2.2.15: right cluster — game code (bold gold, primary), hand # below
- * (small muted, secondary). Vertical stack with the code as the eyebrow
- * so it dominates over the phase-of-match hand number. */
+/* v2.2.17: right cluster text sizes bumped for readability + symmetry
+ * with the left token column. Code is the primary (16 px gold bold);
+ * hand # is the secondary (11 px muted small caps). */
 .head-right {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   align-items: flex-end;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--cream-dim);
   flex-shrink: 0;
   min-width: 0;
@@ -576,19 +579,20 @@ button { cursor: pointer; }
 }
 .hand-num {
   text-transform: uppercase;
-  letter-spacing: 1.2px;
+  letter-spacing: 1.4px;
   white-space: nowrap;
-  font-size: 9px;
-  color: var(--muted);
+  font-size: 11px;
+  color: var(--cream-dim);
   font-weight: 600;
   order: 2;
 }
 .room-code.small {
-  font-size: 13px;
-  letter-spacing: 1.5px;
+  font-size: 16px;
+  letter-spacing: 2px;
   white-space: nowrap;
   order: 1;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
 /* v2.2.15: trump dial — a persistent graphical medallion in the center
@@ -654,13 +658,14 @@ button { cursor: pointer; }
 
 .phase-banner {
   text-align: center;
-  padding: 6px 10px;
-  font-size: 13px;
+  padding: 7px 12px;
+  font-size: 14px;
   color: var(--cream-dim);
-  background: rgba(0,0,0,0.2);
-  min-height: 28px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.15) 100%);
+  min-height: 30px;
   flex-shrink: 0;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
 .phase-banner.your-turn { color: var(--gold); font-weight: 700; }
 .phase-banner.cutting { color: #ffb84d; font-weight: 700; }
@@ -673,26 +678,27 @@ button { cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 4px 10px;
-  font-size: 12px;
+  gap: 12px;
+  padding: 5px 12px;
+  font-size: 13px;
   color: var(--cream-dim);
-  background: rgba(0,0,0,0.25);
-  border-bottom: 1px solid rgba(0,0,0,0.3);
+  background: rgba(0,0,0,0.28);
+  border-bottom: 1px solid rgba(230, 200, 106, 0.12);
   flex-shrink: 0;
   min-height: 0;
 }
 .bid-strip:empty { display: none; }
 .bid-strip .bid-strip-label {
   text-transform: uppercase;
-  letter-spacing: 1px;
-  font-size: 10px;
+  letter-spacing: 1.2px;
+  font-size: 11px;
   color: var(--muted);
+  font-weight: 600;
 }
 .bid-strip .bid-strip-value {
   color: var(--gold);
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 800;
+  font-size: 16px;
   font-family: ui-monospace, Menlo, Consolas, monospace;
 }
 .bid-strip .bid-strip-bidder { color: var(--cream); }
@@ -831,10 +837,12 @@ button { cursor: pointer; }
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(48px, auto) 1fr minmax(48px, auto);
-  grid-template-rows: minmax(60px, auto) 1fr;
-  gap: 4px;
-  padding: 8px;
+  grid-template-columns: minmax(54px, auto) 1fr minmax(54px, auto);
+  grid-template-rows: minmax(76px, auto) 1fr;
+  /* v2.2.17: larger row gap separates the top seat's back stack from
+   * the top trick card (previously visually kissed). */
+  gap: 10px 6px;
+  padding: 10px;
   overflow: hidden;
 }
 .seat-slot { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; min-height: 0; }
@@ -849,23 +857,23 @@ button { cursor: pointer; }
  * the names readable without looking like naked text on the felt. */
 .seat-name {
   display: inline-block;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.7px;
   color: var(--cream-dim);
-  margin-bottom: 5px;
-  padding: 3px 10px;
+  margin-bottom: 6px;
+  padding: 4px 12px;
   text-align: center;
-  max-width: 118px;
+  max-width: 128px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.3) 100%);
-  border: 1px solid rgba(230, 200, 106, 0.22);
+  background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.32) 100%);
+  border: 1px solid rgba(230, 200, 106, 0.26);
   border-radius: 999px;
   box-shadow:
     0 1px 2px rgba(0,0,0,0.4),
-    inset 0 1px 0 rgba(255,255,255,0.05);
+    inset 0 1px 0 rgba(255,255,255,0.06);
   transition: border-color 180ms ease, box-shadow 180ms ease, color 180ms ease;
 }
 .seat-name.active {
@@ -905,13 +913,13 @@ button { cursor: pointer; }
  * empty .seat-bid is collapsed (no stray outline / empty pill).
  * "pass" renders in a muted pill; numeric bids in a gold-accented pill. */
 .seat-bid {
-  margin-top: 5px;
-  font-size: 10px;
-  letter-spacing: 0.8px;
+  margin-top: 6px;
+  font-size: 11px;
+  letter-spacing: 0.9px;
   font-weight: 600;
   color: var(--cream);
   text-align: center;
-  max-width: 118px;
+  max-width: 128px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -950,8 +958,12 @@ button { cursor: pointer; }
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   grid-template-rows: 1fr 1fr 1fr;
+  /* v2.2.17: small inner gap so the top/bottom trick cards breathe away
+   * from adjacent labels + stacks. */
+  gap: 6px;
   align-items: center;
   justify-items: center;
+  padding: 4px 0;
 }
 .trick-card {
   display: flex;
@@ -1019,13 +1031,17 @@ button { cursor: pointer; }
 /* ============ Your seat (bottom) ============ */
 .seat-bottom {
   flex-shrink: 0;
-  padding: 4px 8px 6px;
+  padding: 8px 8px 6px;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;      /* v2.2.17: center the name pill over the hand */
   min-width: 0;
 }
-.seat-bottom .seat-name { font-size: 11px; }
+.seat-bottom .seat-name {
+  font-size: 12px;
+  align-self: center;
+  margin-bottom: 4px;
+}
 
 /* v2.2.9: the separate .your-trump row above the hand was removed —
  * the indicator is now rendered inline inside .your-hand via
@@ -1034,6 +1050,7 @@ button { cursor: pointer; }
 .your-hand {
   display: flex;
   flex-direction: row;
+  align-self: stretch;
   /* `safe center` centers the hand when it fits, but falls back to
    * left-align when cards overflow — prevents the left-most cards from
    * being scrolled off-screen (the failure mode of plain `center`). */
