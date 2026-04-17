@@ -164,51 +164,49 @@ Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Deployment (Railway)
 
-Railway watches **`claude/mobile-game-development-GifG7`**. Pushing to
-that branch triggers an auto-build via `Dockerfile`; Railway sets `PORT`
-itself. To ship a release:
-
-```bash
-# from a feature branch, after running the test suite below:
-git checkout claude/mobile-game-development-GifG7
-git merge <feature-branch> --no-edit
-git push origin claude/mobile-game-development-GifG7
-# wait ~60s, then:
-curl https://<your-app>.up.railway.app/version
-# → {"version":"2.2.5","startedAt":"..."}
-```
-
-If `version` matches `package.json#version`, you're live. Full procedure,
-troubleshooting, and rollback steps are in
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+Railway watches **`claude/mobile-game-development-GifG7`** and auto-builds
+via Dockerfile. To ship: merge your feature branch into the watched
+branch and push; `curl /version` to confirm. Full procedure,
+troubleshooting, and rollback in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Tests
 
+All seven scripts must be green before pushing to the watched branch:
+
 ```bash
-node scripts/layout-smoke.js   # 36 structural assertions
-node scripts/cut-test.js       # 24 engine assertions, 3 cut scenarios
-node scripts/bid-test.js       # 31 engine assertions, 5 bid + open scenarios
-node scripts/robust-test.js    # 24 boundary + live-boot assertions
+node scripts/layout-smoke.js   # 45 structural assertions
+node scripts/cut-test.js       # 34 engine assertions, 4 cut scenarios
+node scripts/bid-test.js       # 58 engine assertions, 8 bid + open scenarios
+node scripts/robust-test.js    # 16 boundary + live-boot assertions
 node scripts/smoke.js          # one full 4-AI match
 node scripts/soak.js 5         # 5 matches; token invariant
 node scripts/e2e.js            # boots server, drives socket
 ```
 
-All five must be green before pushing to the watched branch. Full
-test scenarios (including manual mobile-UX checks) are in
+Full test scenarios (including manual mobile-UX checks and the
+"how to add a test" pattern) are in
 [`docs/TESTING.md`](docs/TESTING.md).
 
-## Documentation for Future Contributors (Human or AI)
+## Documentation map (audience-first)
 
-**If you are a new AI instance continuing this project, read
-[`docs/SOUL.md`](docs/SOUL.md) first.** It is the orientation file.
+Pick your entry point:
 
-- [`docs/SOUL.md`](docs/SOUL.md) — Identity, principles, and self-improvement
-  protocol for any agent working on this codebase.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — File map, data flow,
-  state shape.
-- [`docs/RULES.md`](docs/RULES.md) — Canonical 304 rules as implemented here.
-- [`docs/API.md`](docs/API.md) — Socket.IO event protocol.
-- [`docs/TASKS.md`](docs/TASKS.md) — What's done, what's pending, priorities.
-- [`docs/DECISIONS.md`](docs/DECISIONS.md) — Why we made key design choices.
-- [`docs/TESTING.md`](docs/TESTING.md) — Test scenarios and how to verify.
+- **Playing the game** → [`docs/RULES.md`](docs/RULES.md) (starts with a
+  glossary; no programming needed).
+- **Operating / deploying** → [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+  (release procedure, troubleshooting, rollback).
+- **Contributing code** → [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+  (file map, phase diagram, state shape) → then
+  [`docs/API.md`](docs/API.md) (Socket.IO protocol + error reasons) →
+  then [`docs/TESTING.md`](docs/TESTING.md).
+- **Understanding a past choice** →
+  [`docs/DECISIONS.md`](docs/DECISIONS.md) (scan the index at the top,
+  then jump to the entry).
+- **Starting a new AI session** → [`docs/SOUL.md`](docs/SOUL.md) (boot
+  sequence, principles, anti-patterns) → then
+  [`COLLABORATION.md`](COLLABORATION.md) (branch model, current
+  status) → then [`docs/TASKS.md`](docs/TASKS.md) ("what's next").
+
+Every cross-link between docs is relative. If you update one file,
+scan the others for stale references — broken cross-links are a signal
+that the docs have drifted from reality.

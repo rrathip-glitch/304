@@ -1,6 +1,15 @@
 # Socket.IO Protocol
 
-All events are JSON. Timings reference client-perceived latency targets.
+All events are JSON. The server is authoritative: clients send *intents*,
+the server computes and broadcasts *views*. A client never sees the
+full `GameState` — always a filtered `PlayerView` (see
+[`ARCHITECTURE.md#game-state-shape`](ARCHITECTURE.md#game-state-shape)
+for the underlying state; the filter rules live in the same file).
+
+All inbound payloads pass through
+[`src/util/sanitize.js`](../src/util/sanitize.js) first. Malformed
+payloads are rejected at the boundary with `actionError`; they never
+touch `game.applyAction`.
 
 ## Client → Server events
 
@@ -140,5 +149,72 @@ or during play:
 ## Reconnection
 
 On `connect`, the client may send `resume { roomId, name }`. If the server
-finds a matching seat whose player has disconnected, it binds the new socket
-to that seat and sends the current view.
+finds a matching seat whose player has disconnected (or even one whose
+stale socket id is still bound — the old connection may not have fired
+`disconnect` yet), it rebinds the new socket to that seat and sends the
+current view. See `server.js#resume` for the exact tie-breaking.
+
+The client's **emit gate** (`public/client.js`) holds every user action
+until the server confirms the seat. This is what prevents the "Start
+Game loops to landing" class of bugs when the socket briefly blips on
+mobile — see the comment block at `public/client.js#emit-gate` for the
+full story.
+
+## Error reasons (`actionError.reason`)
+
+`actionError` carries a short string. These are the strings the client
+may see; group them by where they come from:
+
+### Boundary / routing (server.js)
+
+| `reason` | When |
+|---|---|
+| `"malformed action"` | `sanitizeAction` returned null (wrong type, missing field, out-of-range value). |
+| `"no room"` | Your socket is not bound to any room. Usually means a stale buffered event reached the server before `resume`. The client auto-issues `resume` and swallows this one. |
+| `"not seated"` | You're in a room but haven't claimed a seat. |
+| `"not your turn"` | Valid action type for the phase, but you're not the actor. |
+| `"room not found"` | The room code doesn't exist (server restart / idle GC). Client clears session and returns to landing. |
+| `"no seat to resume"` | You asked to resume but no seat with that name exists. |
+| `"host only"` / `"game already started"` / `"seat occupied"` / `"invalid seat"` / `"seat is not AI"` | Lobby operations (setSeat, addAI, removeAI, startGame). |
+
+### Engine (src/engine/game.js)
+
+| `reason` | Phase(s) | When |
+|---|---|---|
+| `"missing action type"` | any | Action has no `type` field. |
+| `"not your turn"` | any | Engine-level actor mismatch. |
+| `"unknown phase"` | any | Defensive; should never fire in prod. |
+| `"minimum bid is 160"` / `"bids must be multiples of 10"` | bid4 | Self-explanatory. |
+| `"your bid floor is <n>"` | bid4 | Prior-turn or partner-is-high restriction raised your floor. |
+| `"must exceed current high bid"` | bid4 / bid8 | |
+| `"you are already the high bidder"` | bid4 / bid8 | No self-overbid (house rule v2.1.0). |
+| `"you asked partner to bid — you can only pass this round"` | bid4 | Asker lockout (house rule v2.2.1). |
+| `"ask-partner already used this round"` | bid4 | Once per round (house rule v2.2.3). |
+| `"only the first bidder may demand redeal"` / `"hand too strong for redeal"` / `"redeal only on first action"` | bid4 | Redeal gating. |
+| `"minimum 8-card bid is 250"` / `"cannot bid after partner"` | bid8 | |
+| `"only trump maker picks"` / `"card not in hand"` | trump_pick1/2 | |
+| `"only the trick-1 leader may declare open"` | open_choice | House rule v2.1.0. |
+| `"open declaration: must lead the trump indicator on trick 1"` | play | Open commitment (house rule v2.1.0). |
+| `"cannot lead the trump indicator"` | play | Indicator lead-out only in trick 8 when forced. |
+| `"first trick lead cannot be trump in closed game"` | play | |
+| `"must follow suit"` | play | |
+| `"exhausted trumps: must lead trump"` | play | Open-game rule. |
+| `"trump maker cannot play a non-indicator trump face-down …"` | play | House rule v2.2.5. |
+
+`actionError` is sent **only** to the offending client; no other seat
+sees the attempt.
+
+## Adding a new action type
+
+If you extend the protocol:
+
+1. Add the type to `ACTION_TYPES` in `src/util/sanitize.js` and extend
+   `sanitizeAction` to validate / coerce its payload.
+2. Add a `case` branch in the engine (`applyAction` → whichever
+   `handle<Phase>` is appropriate). Return `{ ok: true }` or `fail(reason)`.
+3. Wire `legalActions` so the client knows to render a button / tap
+   target for the new action.
+4. Add a test in `scripts/<existing-or-new>-test.js` exercising both
+   the accepted and the rejected cases.
+5. Update this file's Client → Server events table + the Error reasons
+   table above.

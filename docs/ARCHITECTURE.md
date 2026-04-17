@@ -33,15 +33,16 @@ Browser (phone)                            Railway (Node)
 ├── railway.json              # Railway config (optional)
 ├── .gitignore
 ├── README.md                 # Human entry point
+├── COLLABORATION.md          # Agent + branch coordination
 ├── docs/
 │   ├── SOUL.md               # Agent orientation (read first!)
-│   ├── RULES.md              # Canonical 304 rules
-│   ├── ARCHITECTURE.md       # This file
-│   ├── API.md                # Socket.IO protocol
+│   ├── RULES.md              # Canonical 304 rules (incl. glossary)
+│   ├── ARCHITECTURE.md       # This file: state shape + phase diagram
+│   ├── API.md                # Socket.IO protocol + error table
 │   ├── TASKS.md              # Work tracker
-│   ├── DECISIONS.md          # ADR log
-│   ├── TESTING.md            # Manual test scenarios
-│   └── DEPLOYMENT.md         # Railway specifics
+│   ├── DECISIONS.md          # ADR log (append-only)
+│   ├── TESTING.md            # Test inventory + manual scenarios
+│   └── DEPLOYMENT.md         # Railway specifics + rollback
 ├── src/
 │   ├── engine/
 │   │   ├── cards.js          # Deck, ranks, compare, winning index
@@ -66,61 +67,130 @@ Browser (phone)                            Railway (Node)
     └── layout-smoke.js       # Static analysis of CSS/HTML/JS rules
 ```
 
+## Module boundaries
+
+| Module | Owns | Never does |
+|---|---|---|
+| `src/engine/cards.js` | Deck, rank order, point values, `winningIndex`, `compareCards`. Pure. | Networking, DOM, state mutation beyond shuffle. |
+| `src/engine/game.js` | Phase state machine, `applyAction`, `legalActions`, `viewFor`, `whoseTurn`. Pure; no I/O. | Express, Socket.IO, AI decisions, DOM. |
+| `src/engine/ai.js` | `chooseAction(state, seat)` — picks a legal action for a non-human seat. Reads state but never mutates. | Networking, DOM, writing to state. |
+| `src/util/sanitize.js` | `sanitizeName`, `sanitizeAction`. Pure boundary validators for any untrusted input. | Game logic, error UX. |
+| `server.js` | HTTP + Socket.IO, room manager, AI scheduler, stall fallback, idle GC. | Game rules, card ranking. All state-changing paths go through `game.applyAction`. |
+| `public/client.js` | UI state, render loop, emit gate, session persistence. | Authoritative game state — it always trusts the server view. |
+| `public/cards.js` | DOM rendering helpers for a card (face-up / face-down / small / legal). | Game logic, DOM event routing beyond a single `onClick`. |
+
 ## Data Flow (typical turn)
 
 1. User taps a card to play.
-2. Client emits `{event: 'action', type: 'playCard', cardId}`.
-3. Server validates via `game.canPlay(state, seat, card)`.
-4. If legal, `game.applyAction(state, action)` mutates state.
-5. Server broadcasts a filtered **view** to each seat (hiding opponents'
-   hands and the trump indicator when applicable).
-6. Client receives the view and re-renders.
-7. If next player is AI, server schedules `ai.chooseAction(state, seat)` on
-   a short delay (for perceived think-time).
+2. `public/client.js` emits `action { type: 'playCard', cardId, faceDown }` through the **emit gate** (drops it on the floor if the socket is mid-reconnect; flushes when the seat is rebound).
+3. `server.js` routes it through `sanitizeAction` (boundary) then `game.applyAction(state, seat, action)`.
+4. If legal, the engine mutates state in-place and returns `{ ok: true }`. Illegal returns `{ ok: false, reason }` → client receives `actionError`.
+5. Server broadcasts a filtered **view** to each seat via `game.viewFor(state, seat)`. Hidden state (other hands, closed indicator, face-down cards from other seats) is stripped.
+6. Each client receives its view and re-renders.
+7. If the *next* actor is AI or a disconnected human, `scheduleAITurn` arms a timer (600–1200 ms for AI pacing, 25 s for stall-fallback) that re-runs the cycle.
 
-## Game State Shape (v1)
+## Phase state machine
+
+```
+              startHand                           all pass
+  waiting ─────────────►  bid4  ─┬──► (redeal; dealer rotates) ─┐
+                                 │                              │
+                                 │ winning bid                  │
+                                 ▼                              │
+                           trump_pick1                          │
+                                 │                              │
+                                 │ deals second batch           │
+                                 ▼                              │
+                              bid8  ─┬──► (no one outbids) ─────┤
+                                     │                          │
+                                     │ someone outbids          │
+                                     ▼                          │
+                               trump_pick2                      │
+                                     │                          │
+                                     ▼                          │
+                             open_choice                        │
+                                     │                          │
+                                     ▼                          │
+                                   play  ◄──── inspect          │
+                                     │            ▲             │
+                                     │ 4 cards   │ continue     │
+                                     ▼           │              │
+                                  resolveTrick ──┘              │
+                                     │                          │
+                                     │ 8 tricks done            │
+                                     ▼                          │
+                                 hand_end ─┬──► next hand ──────┘
+                                           │
+                                           │ team ≥ 22 tokens
+                                           ▼
+                                       game_over
+```
+
+Each transition is either deterministic (engine advances on its own) or
+driven by a player action listed in [`API.md#client--server-events`](API.md#client--server-events).
+The engine refuses actions that don't fit the current phase — see the
+`switch (state.phase)` dispatch in `applyAction`.
+
+## Game State Shape
+
+This is the authoritative type of the in-memory state owned by `game.js`.
+Field comments describe *why* the field exists, not just its type. The
+canonical source of truth is `createGame()` in
+[`src/engine/game.js`](../src/engine/game.js) — if this diverges, the code
+wins and this doc is stale.
 
 ```ts
 type Suit = 'S'|'H'|'D'|'C';
 type Rank = '7'|'8'|'Q'|'K'|'10'|'A'|'9'|'J';
-type Card = { suit: Suit, rank: Rank, id: string };
+type Card = { suit: Suit, rank: Rank, id: string };   // id = rank + suit (e.g. 'JS')
+type Seat = { name: string, isAI: boolean } | null;
 
 type PlayedCard = {
   seat: 0|1|2|3,
   card: Card,
-  faceDown: boolean,    // closed-trump discard or trump indicator played face-down
-  isTrumpIndicator: boolean
+  faceDown: boolean,          // closed-trump disposal OR indicator played face-down
+  isTrumpIndicator: boolean,  // true iff this play WAS the trump indicator
 };
 
 type GameState = {
+  // ---- Room-level (persist across hands until game_over) -----------------
   roomId: string,
   phase: 'waiting'|'bid4'|'trump_pick1'|'bid8'|'trump_pick2'|'open_choice'
         |'play'|'inspect'|'hand_end'|'game_over',
-  seats: [Seat, Seat, Seat, Seat],      // player presence
-  dealer: 0|1|2|3,
+  seats: [Seat, Seat, Seat, Seat],
+  dealer: 0|1|2|3,                            // rotates right after each hand
   handNumber: number,
-  tokens: [number, number],             // team tokens
-  message: string,
-  log: string[],
+  tokens: [number, number],                   // team tokens, always sums to 22
+  message: string,                            // last log line, shown in UI
+  log: string[],                              // capped at 50 entries
 
-  // Per-hand state (reset at startHand)
+  // ---- Per-hand state (reset at startHand) -------------------------------
   hands: [Card[], Card[], Card[], Card[]],    // PRIVATE per seat
-  bids: BidAction[],                          // history
-  currentBidder: 0|1|2|3|null,
-  passedSeats: Set<number>,
+  bids: BidAction[],                          // history of bid/pass/ask in order
+  currentBidder: 0|1|2|3|null,                // whose turn to bid
+  passedSeats: number[],                      // seats that have passed this round
+  bidTurns: [number, number, number, number], // how many turns each seat has taken
+  askedPartner: [boolean,boolean,boolean,boolean], // symmetric: asker + partner both true
+  isAsker: [boolean,boolean,boolean,boolean], // true only for the seat that called askPartner
+  bid8Turns: number,                          // counter used by advanceBid8
   highBid: { amount: number, bidder: 0|1|2|3 }|null,
+
   trumpMaker: 0|1|2|3|null,
-  trumpIndicator: Card|null,                  // PRIVATE (trump maker) until revealed
+  trumpIndicator: Card|null,                  // PRIVATE (trump maker) while closed; held OUTSIDE hands[]
   trumpSuit: Suit|null,
   isOpenTrump: boolean,
-  trumpRevealed: boolean,
+  trumpRevealed: boolean,                     // true once anyone should see the suit
+  openIndicatorId: string|null,               // v2.1.0 open-commitment: the id the maker MUST lead
+
   currentTrick: PlayedCard[],
   trickLeader: 0|1|2|3|null,
   currentPlayer: 0|1|2|3|null,
   tricksWon: [number, number],
-  trickPoints: [number, number],              // internal units
+  trickPoints: [number, number],              // internal units, summed per team
   tricksPlayed: number,
-  lastTrick: PlayedCard[]|null,               // for UI display
+  lastTrick: PlayedCard[]|null,               // surfaced in views for post-trick UI
+  cutResolved: boolean,                       // true the frame a trump cut won a trick
+  pendingSecondBatch: Card[]|null,            // remaining 16 cards until dealSecondBatch
 };
 ```
 

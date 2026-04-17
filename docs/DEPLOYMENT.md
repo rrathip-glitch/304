@@ -6,7 +6,7 @@
 git push origin claude/mobile-game-development-GifG7
 # Railway auto-builds via Dockerfile and rolls the deployment in ~60 s.
 curl https://<your-app>.up.railway.app/version
-# → {"version":"2.0.0","startedAt":"2026-04-17T..."}
+# → {"version":"<package.json#version>","startedAt":"<ISO timestamp>"}
 ```
 
 If `version` matches `package.json#version`, you're live. If not, see
@@ -50,18 +50,23 @@ feature work    →    push child branch    →    merge into watched    →    
 Run from the repo root, working on a feature branch:
 
 ```bash
-# 1. Verify locally — all five must be green.
+# 1. Verify locally — all seven must be green.
 node scripts/layout-smoke.js
 node scripts/cut-test.js
+node scripts/bid-test.js
+node scripts/robust-test.js
 node scripts/smoke.js
 node scripts/soak.js 5
 node scripts/e2e.js
 
 # 2. Bump version IF the change is user-visible or protocol-affecting.
 #    Edit package.json#version (semver). Sync the value into:
-#      - public/index.html (build marker + ?v= cache-bust query strings)
+#      - public/index.html (build marker + ?v= cache-bust query strings
+#        + dbg-build element)
 #      - public/client.js (BUILD constant)
-#    layout-smoke.js will fail loudly if these drift.
+#      - scripts/layout-smoke.js (the /v=X.Y.Z/ and /BUILD = 'X.Y.Z'/
+#        regex literals)
+#    layout-smoke.js will fail loudly if ANY of these drift.
 
 # 3. Commit + push the feature branch.
 git push origin <feature-branch>
@@ -156,6 +161,23 @@ If a deploy breaks the game:
 
 The same `node server.js` runs in prod. No build step. Iteration is:
 
-1. Change code locally → `node scripts/<all five tests>`.
+1. Change code locally → run the seven test scripts (see
+   [`TESTING.md`](TESTING.md)).
 2. `git push origin <feature-branch>` → review.
 3. Merge into watched branch → `git push` → Railway redeploys.
+
+## If Railway is unreachable
+
+The app is a single Node process that reads `PORT` from the environment
+and serves on `/`. You can host it on any platform that can build a
+Dockerfile:
+
+```bash
+docker build -t game-304 .
+docker run -p 3000:3000 game-304
+# http://localhost:3000
+```
+
+The only Railway-specific details are the `railway.json` (builder +
+health-check + restart policy) and the watched-branch convention above.
+Nothing in the application code depends on Railway.

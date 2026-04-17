@@ -1,6 +1,37 @@
 # Decision Log
 
 Append-only. Each entry: date, decision, alternatives, rationale, links.
+If a decision is reversed, add a new entry that references and supersedes
+the old one — never edit prior entries.
+
+## Index
+
+Scan the index before diving in; each row is a one-line characterization
+of the decision's scope. Chronological order within each bracket.
+
+| Version | Area | Decision |
+|---|---|---|
+| v1.0.0 | Stack | Vanilla HTML/CSS/JS client — no framework |
+| v1.0.0 | Stack | In-memory room state only (no DB/Redis) |
+| v1.0.0 | Stack | Socket.IO over raw WebSocket |
+| v1.0.0 | Engine | Integer points internally, decimal display (×10) |
+| v1.0.0 | Engine | Counter-clockwise indexing `next(p) = (p+3) % 4` |
+| v1.0.0 | House rule | All-8-tricks = 5 tokens ("high court") |
+| v2.0.0 | Deploy | Pin Railway builder to `DOCKERFILE` |
+| v2.0.0 | UX | Cutting mechanic UX; maker peek; indicator selectable |
+| v2.0.0 | UX | Responsive layout (`clamp` + `100dvh` + safe-area) |
+| v2.1.0 | House rule | No bidding over yourself (bid4 + bid8) |
+| v2.1.0 | House rule | Open declaration committal; only for trick-1 leader |
+| v2.2.0 | Robustness | Stall fallback (25 s AI takeover on disconnect) |
+| v2.2.0 | Robustness | Idle room GC (30 min + sweep every 5 min) |
+| v2.2.0 | Security | Boundary input hardening (`src/util/sanitize.js`) |
+| v2.2.1 | House rule | Asker lockout (asker can only pass for the round) |
+| v2.2.2 | UX | Bid display convention (subtract 100 in `[160, 250)`) |
+| v2.2.3 | House rule | askPartner = asker's pass; once per round |
+| v2.2.4 | House rule | Cut reveal shows only trump-suited face-downs |
+| v2.2.5 | House rule | Maker face-down = disposal or indicator only |
+| v2.2.5 | UX | Remove custom-bid free-form input |
+| v2.2.6 | Quality | Engine quality pass; hand-clip fix; trump-status pill |
 
 ---
 
@@ -501,6 +532,65 @@ the digits users typed (160/170/…).
   disposal path still works).
 - `scripts/layout-smoke.js` — asserts the custom input and the
   bid-input placeholder are both gone.
+
+---
+
+---
+
+## 2026-04-17 — Engine quality pass + trump-status pill + hand-clip fix — v2.2.6
+
+**Three threads shipped together after merging the parallel v2.2.5
+branch (`claude/mobile-game-development-GifG7`) back into the
+quality-pass branch.**
+
+### 1. Engine quality pass
+
+- Removed dead state fields: `closeCaps`, `dealtFirstBatch`,
+  `bid8Passes`, and the `isCloseCaps` flag on `highBid` (its branch in
+  `finalizeHand` was unreachable).
+- `bid8Turns` now initialized in `createGame`/`startHand`, matching
+  every other per-hand field — was previously set only when entering
+  `bid8`.
+- `handlePlay` no longer mutates the caller's action payload; a local
+  `faceDown` variable carries the decision.
+- Dropped dead indicator-in-hand checks in `handlePlay` (the indicator
+  is held **outside** `hands[seat]` while closed; those predicates
+  were structurally unreachable).
+- Exported `whoseTurn` from `src/engine/game.js`; removed the duplicate
+  phase→actor mapping from `server.js`.
+- Hoisted `STALL_FALLBACK_MS` / `IDLE_ROOM_TTL_MS` /
+  `IDLE_SWEEP_INTERVAL_MS` above `scheduleAITurn` (they were relying on
+  forward reference through a closure — legal but brittle).
+- `setSeat`, `addAI`, `removeAI` now call `touchRoom`, matching every
+  other lobby operation.
+
+### 2. Hand-row clipping fix
+
+`.your-hand` had `min-height: card-h + 14px` against **18 px** total
+padding under `box-sizing: border-box`, so the content area was
+`card-h − 4px` — and with `overflow-y: hidden`, the mirrored bottom
+corner of every card was shaved. Fixed in both the default and the
+`max-height: 640px` override.
+
+### 3. Trump-status pill
+
+New `#trump-status` element in the table header. Four states:
+
+- hidden before trump pick
+- `TRUMP ♠ OPEN` once public
+- `TRUMP ♠ CLOSED` to the maker (suit visible only to them)
+- `TRUMP CLOSED` to everyone else during a closed game
+
+Suit glyph rendered on a cream disc in its native red/black colour so
+hearts/diamonds stay legible on the dark header.
+
+**Rationale:** the quality pass removed 60+ lines of dead state and
+duplication without changing externally observable behaviour; the CSS
+fix was a box-model off-by-one; the trump pill was user-requested and
+pairs well with the cut-prompt already in the phase banner.
+
+**Tests:** all seven green after the merge (layout-smoke +4 checks for
+v2.2.5 rules + trump pill; cut-test unchanged; bid-test unchanged).
 
 ---
 

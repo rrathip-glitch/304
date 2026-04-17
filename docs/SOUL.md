@@ -160,18 +160,28 @@ The last thing you do in a session, always:
 - **Don't seat humans into AI slots arbitrarily.** Seat 0 is always the room
   creator (host). Seat 2 is the partner invited via link. Seats 1 & 3 default
   to AI opponents.
-- **Don't create `bid` UI controls that allow 190 or other rare amounts as
-  first-class options.** Present 160/170/180/200/210/220/250 as suggested
-  chips, allow custom entry for edge cases (see user message on betting
-  conventions, 2026-04-16).
+- **Don't resurrect a custom-bid free-form input.** Every legal bid
+  amount must be a tappable chip. v2.2.5 removed free-form entry
+  because the internal/display mismatch (e.g. user typed `200` meaning
+  the displayed "100") caused repeated typos. Present
+  160/170/180/200/210/220/250 as solid chips; surface rare amounts
+  (190, 230, 240, 260–300) as ghost chips only when they're legal.
 - **Don't change `railway.json#build.builder` away from `"DOCKERFILE"`.**
   Nixpacks's Node detector caches aggressively and missed redeploys when
   only `public/` changed. v1 ran into this; v2.0.0 pinned DOCKERFILE
   specifically to prevent regression. See `docs/DEPLOYMENT.md`.
-- **Don't bump `package.json#version` without also updating
-  `public/index.html` (the build marker AND the `?v=<version>` cache-bust
-  query strings) and `public/client.js` (the `BUILD` constant).** All four
-  must match. `scripts/layout-smoke.js` will fail loudly if they drift.
+- **Don't bump `package.json#version` without syncing every other
+  carrier of the version string.** The five places that must match:
+  1. `package.json#version` — source of truth.
+  2. `public/index.html` build marker + each `?v=X.Y.Z` cache-bust
+     query + the `dbg-build` element.
+  3. `public/client.js` — the `BUILD` constant.
+  4. `scripts/layout-smoke.js` — the `/v=X\.Y\.Z/` and
+     `/BUILD\s*=\s*'X\.Y\.Z'/` regex literals.
+  5. `README.md` — the version badge.
+
+  `scripts/layout-smoke.js` fails loudly if 1–4 drift; the badge in
+  README is cosmetic but worth keeping in sync.
 - **Don't put new server input handling without going through
   `src/util/sanitize.js`.** Every payload from the network must be
   validated/coerced at the boundary — the engine assumes well-formed
@@ -218,5 +228,5 @@ You are not building a framework. You are building a game for a son to play
 with his dad. When in doubt: would this help them sit down and play tonight?
 If no, defer it.
 
-*Last revised: 2026-04-16. Revise again when your context would have wanted
-it revised.*
+*Last revised: 2026-04-17 during the v2.2.6 quality + docs pass. Revise
+again when your context would have wanted it revised.*

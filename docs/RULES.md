@@ -4,8 +4,36 @@ This is the canonical rules document for **our** implementation of 304.
 Where we diverge from the pagat.com reference or use house variants, it is
 called out explicitly.
 
-Source: https://www.pagat.com/jass/304.html
-Household variant source: user messages dated 2026-04-16 (see DECISIONS.md).
+- **Upstream reference:** https://www.pagat.com/jass/304.html
+- **Household variant source:** user messages dated 2026-04-16; captured as
+  ADR entries in [`DECISIONS.md`](DECISIONS.md).
+- **Implemented by:** [`src/engine/game.js`](../src/engine/game.js)
+  (state machine) + [`src/engine/cards.js`](../src/engine/cards.js)
+  (deck + ranking). Every house rule below is exercised in
+  [`scripts/bid-test.js`](../scripts/bid-test.js) or
+  [`scripts/cut-test.js`](../scripts/cut-test.js).
+
+---
+
+## Glossary
+
+Read this once; the rest of the document assumes the vocabulary.
+
+| Term | Meaning |
+|---|---|
+| **Seat** | One of the four positions at the table, indexed `0..3`. Seat 0 is always the room creator (host). |
+| **Partner** | The player opposite you. Partners share a team: `{0, 2}` vs `{1, 3}`. |
+| **Trump maker** (or caller) | The winner of the bidding; sets the trump suit by picking an indicator. |
+| **Trump indicator** | The one face-down card the maker places aside to designate the trump suit. Held *outside* the maker's hand while the game is closed. |
+| **Closed** game | The default. Trump indicator is secret; nobody except the maker knows the trump suit. |
+| **Open** game | Trump suit is public. Triggered by an explicit `declareOpen`, a successful cut, or the auto-open rule for bids ≥ 250. |
+| **Cut** | In a closed game, playing a card face-down to attempt winning with trump. If the face-down card is a trump, the trick is won and the game opens. |
+| **Disposal** | In a closed game, playing a *non-trump* face-down when you can't follow suit. It cannot win; the card stays hidden forever. |
+| **Maker peek** | Rendering affordance: the trump maker privately sees every face-down card face-up, because they have to know which cuts were successful. The UI shows a gold ring + "cut" badge so the maker remembers the others still see a back. |
+| **High court** | House rule: winning all 8 tricks in a hand awards 5 tokens regardless of bid level. |
+| **Token** | Scoring currency. Each team starts with 11; first to 22 wins the match. |
+| **Hand** | One deal's worth of play (8 tricks). Rotates dealer afterwards. |
+| **Match** | Multiple hands played until one team accumulates all 22 tokens. |
 
 ---
 

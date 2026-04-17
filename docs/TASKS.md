@@ -5,15 +5,20 @@
 
 ## Where we are
 
-**v2.2.0 ships ready for production play.** Engine is feature-complete for
-the household variant. UI is responsive across iPhone SE → iPad mini.
-Multiplayer survives reconnects, closed tabs, and idle rooms. All seven
-test scripts are green. Doc suite is fresh.
+**v2.2.6 is live on Railway.** Engine is feature-complete for the
+household variant. UI is responsive across iPhone SE → iPad mini.
+Multiplayer survives reconnects, closed tabs, and idle rooms. All
+seven test scripts green (45 + 31 + 34 + 16 boundary + 3 match + 5 soak
++ 4 e2e assertions).
 
 ```
-Watched branch: claude/mobile-game-development-GifG7   (Railway auto-deploys)
-Feature branch: claude/fix-layout-cutting-mechanic-kepuN (active work)
+Watched branch: claude/mobile-game-development-GifG7    (Railway auto-deploys)
+Current work:   claude/quality-improvement-xvHGJ        (merges into watched)
 ```
+
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the release procedure and
+[`DECISIONS.md#index`](DECISIONS.md) for a one-line-per-decision
+history.
 
 ## Done
 
@@ -55,6 +60,29 @@ Feature branch: claude/fix-layout-cutting-mechanic-kepuN (active work)
 - [x] `scripts/robust-test.js` (24 assertions; live-server boot test).
 - [x] Documentation fresh-eye review.
 
+### Bidding + scoping polish (v2.2.1–v2.2.4, 2026-04-17)
+- [x] Asker lockout (v2.2.1).
+- [x] Token scale regression locked in by bid-test.
+- [x] Bid display convention (subtract 100 in `[160, 250)`) — v2.2.2.
+- [x] askPartner = asker's pass; once per round — v2.2.3.
+- [x] Cut reveal shows only trump-suited face-downs — v2.2.4.
+
+### Maker face-down restriction + UI tidy (v2.2.5, 2026-04-17)
+- [x] Maker face-down = non-trump disposal OR indicator only.
+- [x] Custom-bid free-form input removed; every legal amount is a chip.
+
+### Engine quality pass + trump pill + hand clip (v2.2.6, 2026-04-17)
+- [x] Dead state cleanup (`closeCaps`, `dealtFirstBatch`, `bid8Passes`,
+      `highBid.isCloseCaps`).
+- [x] Centralised `whoseTurn` in the engine.
+- [x] Hoisted timing constants in `server.js`.
+- [x] `touchRoom` added to `setSeat`/`addAI`/`removeAI`.
+- [x] `.your-hand` min-height fix (bottom-rank clip).
+- [x] Trump status pill in the header (`OPEN ♠` / `CLOSED ♠` / `CLOSED`).
+- [x] Docs deep-refresh: glossary in RULES, phase diagram in
+      ARCHITECTURE, error-reasons table in API, seven-script parity
+      across TESTING/DEPLOYMENT, DECISIONS index.
+
 ## Next up
 
 **Start here if you are a fresh instance:**
@@ -62,30 +90,30 @@ Feature branch: claude/fix-layout-cutting-mechanic-kepuN (active work)
 1. **Visual snapshot harness (Playwright).** `layout-smoke.js` proves
    the *rules* exist; a Playwright suite that snapshots the table at
    the 5 reference viewports would catch *visual* regressions. ~50 LOC
-   + a single devDependency.
+   + one devDependency.
 2. **Invite-link flow for 2nd human.** Add a share button on the lobby
    that copies `https://<domain>/?room=ABCDEF&name=Dad`; client
    auto-joins on load.
-3. **Polish:** card deal animation, trick collection animation, sound
-   effects (card play, trick won, token transfer).
-4. **PCC (Partner Close Caps)** — 3-player mechanics; see
-   `docs/RULES.md#partner-close-caps-pcc`.
+3. **Animations & sound.** Card deal animation, trick collection,
+   sound effects (card play, trick won, token transfer).
+4. **PCC (Partner Close Caps).** 3-player mechanics; see
+   [`RULES.md#partner-close-caps-pcc`](RULES.md#partner-close-caps-pcc).
 
-## Verification status
+## Verification
 
 Run from the repo root (~10 s total):
 
 ```bash
-node scripts/layout-smoke.js   # 36 structural assertions
-node scripts/cut-test.js       # 24 engine assertions
-node scripts/bid-test.js       # 31 engine assertions
-node scripts/robust-test.js    # 24 boundary + live-boot assertions
+node scripts/layout-smoke.js   # 45 structural assertions
+node scripts/cut-test.js       # 34 engine assertions (4 scenarios)
+node scripts/bid-test.js       # 58 engine assertions (8 scenarios)
+node scripts/robust-test.js    # 16 boundary + live-boot assertions
 node scripts/smoke.js          # one full 4-AI match
 node scripts/soak.js 5         # 5 matches; token invariant
 node scripts/e2e.js            # boots server, drives socket
 ```
 
-All seven passing as of v2.2.0. Both branches at the same SHA.
+All seven passing as of v2.2.6.
 
 ## Release procedure
 
@@ -105,7 +133,7 @@ See `docs/DEPLOYMENT.md`. Summary:
 
 - Partner Close Caps full mechanics (bid + 3-player hand).
 - Spoilt Trumps auto-detection & declaration UI.
-- Caps timing penalties (Wrong Caps -2, Losing after Caps -5). House
+- Caps timing penalties (Wrong Caps −2, Losing after Caps −5). House
   rule "all 8 tricks = 5 tokens automatic" remains the substitute.
 - Reconnection persistence across server restart (needs Redis/KV).
 - Visual snapshot harness (Playwright).

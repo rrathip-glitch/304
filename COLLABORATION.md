@@ -8,16 +8,16 @@
 - Repo: `rrathip-glitch/304`
 - **Watched branch (auto-deploys to Railway):**
   `claude/mobile-game-development-GifG7`
-- **Current feature branch (v2.0.0 work):**
-  `claude/fix-layout-cutting-mechanic-kepuN`
-- Clone: `git clone <repo-url> && git checkout claude/fix-layout-cutting-mechanic-kepuN`
+- **Feature branch:** whatever the system prompt pins to this session
+  (most recently `claude/quality-improvement-xvHGJ`). Work happens here
+  and is merged into the watched branch to ship.
 
 ## Two-branch model
 
 ```
-       claude/fix-layout-cutting-mechanic-kepuN   (feature work — push freely)
+       <your feature branch>                      (feature work — push freely)
                               │
-                              │  merge --no-edit
+                              │  merge --no-edit / ff-only
                               ▼
        claude/mobile-game-development-GifG7       (Railway watches this)
                               │
@@ -112,6 +112,42 @@ https://claude.ai/code/session_<id>
 Scopes: `docs`, `engine`, `ai`, `server`, `client`, `deploy`, `fix`, `style`.
 
 ## Current Status
+
+**v2.2.6 — Session 2026-04-17, Claude Opus 4.7 (live on Railway)**
+
+Shipped in this release chain (v2.2.5 → v2.2.6):
+- **Engine quality pass.** Dead state removed (`closeCaps`,
+  `dealtFirstBatch`, `bid8Passes`, `highBid.isCloseCaps`);
+  `whoseTurn` centralised in the engine; timing constants hoisted;
+  lobby handlers (`setSeat`/`addAI`/`removeAI`) reset the idle-GC
+  timer consistently.
+- **Hand-row card clip fix.** `.your-hand` min-height bumped to cover
+  full padding + card height in both the default and the short-screen
+  media query.
+- **Trump status pill** in the table header — `TRUMP ♠ OPEN` /
+  `TRUMP ♠ CLOSED` / `TRUMP CLOSED` depending on viewer role.
+- **Trump maker face-down = disposal or indicator only** (from the
+  parallel v2.2.5 on the watched branch, merged back in).
+- **Custom-bid free-form input removed** — every legal bid is a chip.
+- **Documentation deep refresh.** Glossary in RULES; phase diagram +
+  corrected GameState + module-boundaries table in ARCHITECTURE;
+  errors-reasons table + how-to-add-a-new-action in API; seven-script
+  parity across TESTING & DEPLOYMENT; scannable index atop DECISIONS.
+
+Verification (all green):
+- `node scripts/layout-smoke.js` → 45 checks.
+- `node scripts/cut-test.js` → 34 assertions (4 scenarios).
+- `node scripts/bid-test.js` → 58 assertions (8 scenarios).
+- `node scripts/robust-test.js` → 16 boundary + live-boot assertions.
+- `node scripts/smoke.js`, `soak.js 5`, `e2e.js`.
+
+Next-up priority:
+- Visual snapshot harness (Playwright) at the 5 reference viewports.
+- Invite-link flow for 2nd human (`?room=ABCDEF&name=Dad`).
+- Animation polish: deal, trick sweep, token slide.
+- PCC 3-player mechanics.
+
+---
 
 **v2.2.0 — Session 2026-04-17, Claude Opus 4.7 (ship-ready)**
 
@@ -277,3 +313,18 @@ Next-up priority:
   exists — that's enough for the kind of bugs we've seen (missing
   safe-area, missing clamp, missing overflow cap). For pixel-perfect
   diffs, add a Playwright suite (next-up item).
+- **[2026-04-17 / v2.2.6]** The watched branch and feature branches
+  have occasionally shipped **different v2.2.5 commits in parallel**
+  (one on the watched branch, one on a quality-pass branch). Always
+  `git fetch origin claude/mobile-game-development-GifG7` at the top
+  of a session and merge it into your feature branch before coding —
+  otherwise you will try to ship a version that's already taken. The
+  resolution is to bump to the next patch (2.2.6) and list both sets
+  of changes in the release notes. `git log --oneline --graph`
+  surfaces this quickly.
+- **[2026-04-17 / v2.2.6]** Box-model bug that's easy to regress:
+  `.your-hand` has `box-sizing: border-box` and `overflow-y: hidden`,
+  so `min-height` must cover `card-h + (padding-top + padding-bottom)`
+  plus a small buffer. Don't tighten it without running layout-smoke
+  at the target viewports — the bug manifests as clipped bottom
+  rank/suit corners.
