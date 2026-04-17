@@ -49,13 +49,13 @@ function createGame(roomId = '') {
     // delegated the bid to their partner. Distinct from askedPartner[]
     // (which is symmetric and only controls the ≥200 floor).
     isAsker: [false, false, false, false],
+    bid8Turns: 0,
     highBid: null,
     trumpMaker: null,
     trumpIndicator: null,
     trumpSuit: null,
     isOpenTrump: false,
     trumpRevealed: false,
-    closeCaps: false,
     currentTrick: [],
     trickLeader: null,
     currentPlayer: null,
@@ -64,7 +64,6 @@ function createGame(roomId = '') {
     tricksPlayed: 0,
     lastTrick: null,
     pendingSecondBatch: null,
-    dealtFirstBatch: false,
     cutResolved: false,
     openIndicatorId: null,
   };
@@ -100,7 +99,6 @@ function startHand(state, rng = Math.random) {
   state.trumpSuit = null;
   state.isOpenTrump = false;
   state.trumpRevealed = false;
-  state.closeCaps = false;
   state.currentTrick = [];
   state.trickLeader = null;
   state.currentPlayer = null;
@@ -108,7 +106,7 @@ function startHand(state, rng = Math.random) {
   state.trickPoints = [0, 0];
   state.tricksPlayed = 0;
   state.lastTrick = null;
-  state.dealtFirstBatch = true;
+  state.bid8Turns = 0;
   state.cutResolved = false;
   state.openIndicatorId = null;
 
@@ -221,7 +219,7 @@ function handleBid4(state, seat, action) {
     const floor = minAllowedBid(state, seat);
     if (amount < floor) return fail(`your bid floor is ${floor}`);
     if (state.highBid && amount <= state.highBid.amount) return fail('must exceed current high bid');
-    state.highBid = { amount, bidder: seat, isCloseCaps: false };
+    state.highBid = { amount, bidder: seat };
     state.bidTurns[seat] += 1;
     state.passedSeats = state.passedSeats.filter((s) => s !== seat);
     state.bids.push({ seat, type: 'bid', amount });
@@ -300,7 +298,6 @@ function handleTrumpPick(state, seat, action, round) {
     state.phase = PHASES.BID8;
     state.currentBidder = state.trumpMaker;
     state.bid8Turns = 0;
-    state.bid8Passes = 0;
     log(state, 'Second batch dealt. 8-card bidding (min 250).');
   } else {
     state.phase = PHASES.OPEN_CHOICE;
@@ -315,7 +312,6 @@ function handleBid8(state, seat, action) {
   const partner = partnerOf(seat);
 
   if (type === 'pass') {
-    state.bid8Passes += 1;
     state.bid8Turns += 1;
     log(state, `${state.seats[seat].name} passed in 8-card round.`);
     return advanceBid8(state);
@@ -339,7 +335,7 @@ function handleBid8(state, seat, action) {
       state.trumpIndicator = null;
       state.trumpSuit = null;
       state.trumpMaker = newMaker;
-      state.highBid = { amount, bidder: seat, isCloseCaps: false };
+      state.highBid = { amount, bidder: seat };
       state.bids.push({ seat, type: 'bid', amount, round: 8 });
       state.bid8Turns += 1;
       log(state, `${state.seats[seat].name} outbid at ${amount / 10}. Pick new trump.`);
@@ -347,7 +343,7 @@ function handleBid8(state, seat, action) {
       state.currentBidder = null;
       return { ok: true };
     }
-    state.highBid = { amount, bidder: seat, isCloseCaps: false };
+    state.highBid = { amount, bidder: seat };
     state.bids.push({ seat, type: 'bid', amount, round: 8 });
     state.bid8Turns += 1;
     log(state, `${state.seats[seat].name} raised own bid to ${amount / 10}.`);
@@ -402,7 +398,8 @@ function handlePlay(state, seat, action) {
   if (action.type !== 'playCard') return fail('expected playCard');
   const hand = state.hands[seat];
 
-  // Support playing the trump indicator even when it's held outside the hand.
+  // The trump indicator is held OUTSIDE hands[seat] while the game is closed;
+  // if this seat is the maker, allow playing it by matching its id.
   const hasIndicator = !state.isOpenTrump && state.trumpMaker === seat && !!state.trumpIndicator;
   let idx = hand.findIndex((c) => c.id === action.cardId);
   let card;
@@ -411,24 +408,24 @@ function handlePlay(state, seat, action) {
     if (hasIndicator && state.trumpIndicator.id === action.cardId) {
       card = state.trumpIndicator;
       isIndicator = true;
-      idx = -1;
     } else {
       return fail('card not in hand');
     }
   } else {
     card = hand[idx];
-    isIndicator = hasIndicator && state.trumpIndicator.id === card.id;
   }
-  const leadCard = state.currentTrick[0] && state.currentTrick[0].card;
-  const leadSuit = leadCard ? (state.currentTrick[0].faceDown && !state.currentTrick[0].isTrumpIndicator ? null : leadCard.suit) : null;
+  const firstPlay = state.currentTrick[0];
+  const leadSuit = firstPlay
+    ? (firstPlay.faceDown && !firstPlay.isTrumpIndicator ? null : firstPlay.card.suit)
+    : null;
   const isLead = state.currentTrick.length === 0;
+  let faceDown = action.faceDown === true;
 
   if (isLead) {
     // Indicator is held outside hand; legal to lead it only in trick 8 when
     // it is the player's only remaining card.
     const onlyCardIsIndicator = hand.length === 0 && hasIndicator;
-    const traditionalSoloCase = hand.length === 1 && isIndicator;
-    if (isIndicator && !(state.tricksPlayed === 7 && (onlyCardIsIndicator || traditionalSoloCase))) {
+    if (isIndicator && !(state.tricksPlayed === 7 && onlyCardIsIndicator)) {
       return fail('cannot lead the trump indicator');
     }
     if (!state.isOpenTrump && state.tricksPlayed === 0 && seat === state.trumpMaker && seat === next(state.dealer)) {
@@ -449,17 +446,16 @@ function handlePlay(state, seat, action) {
       if (exhausted) return fail(exhausted);
     }
   } else {
-    const following = hand.some((c) => c.suit === leadSuit && !(!state.isOpenTrump && c === state.trumpIndicator));
+    // Indicator is held outside `hand`, so plain suit membership is the rule.
+    const following = hand.some((c) => c.suit === leadSuit);
     if (following && card.suit !== leadSuit) {
       return fail('must follow suit');
     }
-    if (!following && !state.isOpenTrump) {
-      if (!isIndicator) {
-        const nonIndicatorExists = hand.some((c, i) => i !== idx && !(state.trumpMaker === seat && state.trumpIndicator && c.id === state.trumpIndicator.id));
-        if (!action.faceDown && nonIndicatorExists) {
-          action.faceDown = true;
-        }
-      }
+    // Closed game, can't follow: force face-down unless this is the only card
+    // in hand (forced play — the client's flag is accepted as-is for the
+    // corner case where the indicator is also in play).
+    if (!following && !state.isOpenTrump && !isIndicator && !faceDown && hand.length > 1) {
+      faceDown = true;
     }
   }
 
@@ -472,14 +468,9 @@ function handlePlay(state, seat, action) {
   if (state.openIndicatorId && card.id === state.openIndicatorId) {
     state.openIndicatorId = null;
   }
-  const played = {
-    seat,
-    card,
-    faceDown: !!action.faceDown,
-    isTrumpIndicator: isIndicator,
-  };
+  const played = { seat, card, faceDown, isTrumpIndicator: isIndicator };
   state.currentTrick.push(played);
-  log(state, `${state.seats[seat].name} played ${played.faceDown ? 'a card face-down' : card.rank + card.suit}.`);
+  log(state, `${state.seats[seat].name} played ${faceDown ? 'a card face-down' : card.rank + card.suit}.`);
 
   if (state.currentTrick.length === 4) {
     return resolveTrick(state);
@@ -586,8 +577,6 @@ function finalizeHand(state) {
   let tokens;
   if (allEight) {
     tokens = 5;
-  } else if (state.highBid.isCloseCaps) {
-    tokens = success ? 4 : 5;
   } else if (bidAmt >= 250) {
     tokens = success ? 3 : 4;
   } else if (bidAmt >= 200) {
@@ -618,6 +607,27 @@ function handleHandEnd(state, seat, action) {
   state.dealer = next(state.dealer);
   startHand(state);
   return { ok: true };
+}
+
+// Given a state, return the seat expected to act next — or null if no seat
+// action is pending (WAITING, HAND_END, GAME_OVER). This is the single source
+// of truth for "whose turn is it", used by the server to route actions and
+// schedule AI/stall-fallback turns.
+function whoseTurn(state) {
+  switch (state.phase) {
+    case PHASES.BID4:
+    case PHASES.BID8:
+      return state.currentBidder;
+    case PHASES.TRUMP_PICK1:
+    case PHASES.TRUMP_PICK2:
+    case PHASES.OPEN_CHOICE:
+      return state.trumpMaker;
+    case PHASES.PLAY:
+    case PHASES.INSPECT:
+      return state.currentPlayer;
+    default:
+      return null;
+  }
 }
 
 function legalActions(state, seat) {
@@ -826,6 +836,7 @@ module.exports = {
   applyAction,
   legalActions,
   viewFor,
+  whoseTurn,
   next,
   teamOf,
   partnerOf,

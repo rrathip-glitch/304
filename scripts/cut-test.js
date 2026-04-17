@@ -136,7 +136,6 @@ console.log('\nTest 2: trump indicator is tappable when maker can\'t follow suit
   s.currentTrick = [
     { seat: 1, card: { rank: '7', suit: 'H', id: '7H' }, faceDown: false, isTrumpIndicator: false },
   ];
-  const ids = require('../src/engine/game');
   // Reach into legalActions via viewFor (currentPlayer === seat 0).
   const view = game.viewFor(s, 0);
   const playAction = view.legalActions.find((a) => a.type === 'playCard');

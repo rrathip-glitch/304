@@ -27,7 +27,7 @@ All in-game actions go through this channel. `type` is one of:
 
 | type              | payload                      | phase        |
 |-------------------|------------------------------|--------------|
-| `bid`             | `{ amount, isCloseCaps? }`   | bid4 / bid8  |
+| `bid`             | `{ amount }`                 | bid4 / bid8  |
 | `pass`            | `{}`                         | bid4 / bid8  |
 | `askPartner`      | `{}`                         | bid4 only    |
 | `demandRedeal`    | `{}`                         | bid4 (first turn, dealer's right only) |

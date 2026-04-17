@@ -108,13 +108,12 @@ type GameState = {
   bids: BidAction[],                          // history
   currentBidder: 0|1|2|3|null,
   passedSeats: Set<number>,
-  highBid: { amount: number, bidder: 0|1|2|3, isCloseCaps: boolean }|null,
+  highBid: { amount: number, bidder: 0|1|2|3 }|null,
   trumpMaker: 0|1|2|3|null,
   trumpIndicator: Card|null,                  // PRIVATE (trump maker) until revealed
   trumpSuit: Suit|null,
   isOpenTrump: boolean,
   trumpRevealed: boolean,
-  closeCaps: boolean,                         // PCC flag
   currentTrick: PlayedCard[],
   trickLeader: 0|1|2|3|null,
   currentPlayer: 0|1|2|3|null,

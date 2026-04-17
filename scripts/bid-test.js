@@ -74,10 +74,9 @@ console.log('\nTest 2: trump maker cannot self-overbid in bid8');
   s.trumpMaker = 1;
   s.trumpSuit = 'S';
   s.trumpIndicator = { rank: '10', suit: 'S', id: '10S' };
-  s.highBid = { amount: 220, bidder: 1, isCloseCaps: false };
+  s.highBid = { amount: 220, bidder: 1 };
   s.currentBidder = 1;
   s.bid8Turns = 0;
-  s.bid8Passes = 0;
   // Hand contents don't matter for this test.
   for (let i = 0; i < 4; i++) s.hands[i] = [];
 
@@ -245,7 +244,7 @@ console.log('\nTest 7: token scale per bid range (household variant)');
     const s = fixtureSeated();
     s.phase = game.PHASES.PLAY;
     s.trumpMaker = 0;
-    s.highBid = { amount: bidAmount, bidder: 0, isCloseCaps: false };
+    s.highBid = { amount: bidAmount, bidder: 0 };
     s.tokens = [11, 11];
     const callerTeam = 0;
     const otherTeam = 1;

@@ -31,6 +31,15 @@ const PHASES = game.PHASES;
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const SERVER_STARTED_AT = Date.now();
 
+// Stall-fallback grace window. After this many ms with the actor seat's
+// socket still null, the AI takes the turn on the human's behalf.
+const STALL_FALLBACK_MS = 25000;
+
+// Idle-room GC. A room is dropped if it's been quiet for this long AND
+// no humans are seated (or all humans are disconnected).
+const IDLE_ROOM_TTL_MS = 30 * 60 * 1000;     // 30 min
+const IDLE_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // every 5 min
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -74,20 +83,6 @@ function newRoomCode() {
     if (!rooms.has(c)) return c;
   }
   throw new Error('room code space exhausted');
-}
-
-function whoseTurn(state) {
-  switch (state.phase) {
-    case PHASES.BID4: return state.currentBidder;
-    case PHASES.BID8: return state.currentBidder;
-    case PHASES.TRUMP_PICK1: return state.trumpMaker;
-    case PHASES.TRUMP_PICK2: return state.trumpMaker;
-    case PHASES.OPEN_CHOICE: return state.trumpMaker;
-    case PHASES.PLAY: return state.currentPlayer;
-    case PHASES.INSPECT: return state.currentPlayer;
-    case PHASES.HAND_END: return null;
-    default: return null;
-  }
 }
 
 function broadcastViews(room) {
@@ -136,7 +131,7 @@ function scheduleAITurn(room) {
   const state = room.state;
   if (state.phase === PHASES.WAITING || state.phase === PHASES.GAME_OVER) return;
 
-  const actor = whoseTurn(state);
+  const actor = game.whoseTurn(state);
 
   if (state.phase === PHASES.HAND_END) {
     // If no humans remain, auto-continue as AI promptly.
@@ -181,7 +176,7 @@ function scheduleAITurn(room) {
     if (idx >= 0) room.aiQueue.splice(idx, 1);
     if (!rooms.has(room.code)) return;
     if (room.state !== state) return;
-    const stillActor = whoseTurn(state);
+    const stillActor = game.whoseTurn(state);
     if (stillActor !== actor) return;
     // Re-check at fire time: if a human reconnected, abort the
     // fallback; they get to play their own turn.
@@ -211,15 +206,6 @@ function scheduleAITurn(room) {
     scheduleAITurn(room);
   }, delay);
 }
-
-// Stall-fallback grace window. After this many ms with the actor seat's
-// socket still null, the AI takes the turn on the human's behalf.
-const STALL_FALLBACK_MS = 25000;
-
-// Idle-room GC. A room is dropped if it's been quiet for this long AND
-// no humans are seated (or all humans are disconnected).
-const IDLE_ROOM_TTL_MS = 30 * 60 * 1000;     // 30 min
-const IDLE_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // every 5 min
 
 function sweepIdleRooms() {
   const now = Date.now();
@@ -340,6 +326,7 @@ io.on('connection', (socket) => {
     room.sockets.set(0, null);
     room.sockets.set(target, hostSid);
     socket.data.seat = target;
+    touchRoom(room);
     broadcastViews(room);
   });
 
@@ -353,6 +340,7 @@ io.on('connection', (socket) => {
     if (room.state.seats[target]) return emitError(socket, 'seat occupied');
     const res = game.seatPlayer(room.state, { seat: target, name: 'AI ' + target, isAI: true });
     if (!res.ok) return emitError(socket, res.reason);
+    touchRoom(room);
     broadcastViews(room);
   });
 
@@ -366,6 +354,7 @@ io.on('connection', (socket) => {
     const info = room.state.seats[target];
     if (!info || !info.isAI) return emitError(socket, 'seat is not AI');
     game.removeSeat(room.state, target);
+    touchRoom(room);
     broadcastViews(room);
   });
 
@@ -400,7 +389,7 @@ io.on('connection', (socket) => {
     if (!action) return emitError(socket, 'malformed action');
 
     // Validate it's this seat's turn, based on phase.
-    const actor = whoseTurn(state);
+    const actor = game.whoseTurn(state);
     if (state.phase === PHASES.HAND_END) {
       // any seat (human) can fire continue
     } else if (actor === null || actor === undefined) {
