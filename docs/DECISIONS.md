@@ -45,6 +45,11 @@ of the decision's scope. Chronological order within each bracket.
 | v2.2.12 | House rule | Removed the silent "2nd-turn ≥ 200" floor in bid4 |
 | v2.2.12 | UX | Token indicator now shows `N / 22` + proportional bar (fixed pip misread) |
 | v2.2.12 | Pacing | INSPECT / HAND_END AI delays tuned to flash duration + 1 s linger |
+| v2.2.13 | Layout | Header room-code no-clip, own-hand indicator overlap, opp-seat asymmetry |
+| v2.2.14 | UX | Flash queue (sequential playback) + compact opp indicator pill |
+| v2.2.15 | House rule | Soft bid8 partner lockout: only blocks at ≥ 250 |
+| v2.2.15 | UX | 3-column header (tokens · trump dial · code/hand); decorated seat pills |
+| v2.2.16 | House rule | Removed the askedPartner ≥ 200 floor — asker's partner can raise at any legal amount |
 
 ---
 
