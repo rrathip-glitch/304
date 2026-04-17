@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.11';
+  const BUILD = '2.2.12';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -819,22 +819,34 @@
     renderPips($('#pips-1'), themCount);
   }
 
+  // v2.2.12: token indicator. The old render drew five pip dots
+  // regardless of actual count — so "7 ●●●●●" and "15 ●●●●●" read the
+  // same at a glance, which is misleading (22 tokens are in play; the
+  // relative split is the whole story). New render: the count in bold,
+  // muted "/ 22" anchor for scale, plus a thin proportional bar so the
+  // split is visible without counting digits.
   function renderPips(container, n) {
     container.innerHTML = '';
     const max = 22;
     const shown = Math.max(0, Math.min(max, n));
-    // Show count numerically + a few pips (to fit mobile)
-    const label = document.createElement('span');
-    label.textContent = shown;
-    label.style.fontWeight = '700';
-    label.style.marginRight = '4px';
-    container.appendChild(label);
-    const pipsToDraw = Math.min(shown, 5);
-    for (let i = 0; i < pipsToDraw; i++) {
-      const pip = document.createElement('span');
-      pip.className = 'pip';
-      container.appendChild(pip);
-    }
+
+    const num = document.createElement('span');
+    num.className = 'pips-num';
+    num.textContent = shown;
+    container.appendChild(num);
+
+    const of = document.createElement('span');
+    of.className = 'pips-of';
+    of.textContent = '/' + max;
+    container.appendChild(of);
+
+    const bar = document.createElement('span');
+    bar.className = 'pips-bar';
+    const fill = document.createElement('span');
+    fill.className = 'pips-fill';
+    fill.style.width = Math.round((shown / max) * 100) + '%';
+    bar.appendChild(fill);
+    container.appendChild(bar);
   }
 
   // Opponents (top/left/right): face-down backs for each card in hand.

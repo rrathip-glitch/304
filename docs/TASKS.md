@@ -5,18 +5,22 @@
 
 ## Where we are
 
-**v2.2.10 is live on Railway.** Engine is feature-complete for the
-household variant and now ends hands + rounds the moment their
-outcome is decided. UI is responsive across iPhone SE → iPad mini,
-with a full flash suite narrating every meaningful event (bid settled,
-trump revealed, trick won, hand won, match won). Multiplayer survives
-reconnects, closed tabs, and idle rooms. All seven test scripts
-green (71 layout + ~80 bid + 34 cut + 16 boundary + smoke + soak
-+ e2e).
+**v2.2.12 is live on Railway.** Engine is feature-complete for the
+household variant and the bidding / indicator / flash UX has been
+tightened per user feedback (see COLLABORATION.md "Current Status"
+for v2.2.11–12 details). Highlights since v2.2.10:
+- bid8 enforces "one turn per seat" via `bid8Acted[]`; trump_pick2
+  returns control to bid8 so the remaining seats respond.
+- bid4 removed the silent "2nd-turn ≥ 200" floor.
+- Indicator card is always face-up + playable for the caller; non-
+  callers see a labeled slot in the caller's opponent stack that
+  flips on reveal and disappears once played.
+- Flashes 1.7× longer; AI `INSPECT` / `HAND_END` delays are tuned
+  to keep tricks + hand results on screen past the flash.
 
 ```
 Watched branch: claude/mobile-game-development-GifG7    (Railway auto-deploys)
-Current work:   claude/quality-improvement-xvHGJ        (merges into watched)
+Current work:   claude/fix-bid-trump-logic-v0w8A        (merges into watched)
 ```
 
 See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the release procedure and
@@ -146,7 +150,7 @@ node scripts/soak.js 5         # 5 matches; token invariant
 node scripts/e2e.js            # boots server, drives socket
 ```
 
-All seven passing as of v2.2.10.
+All seven passing as of v2.2.12.
 
 ## Release procedure
 

@@ -132,8 +132,11 @@ scoring) uses the internal value unchanged.
   current bidder via some edge case, the engine rejects the bid with
   `"you have already passed this round"`. You get a fresh slate in
   the 8-card round.
-- **Second-turn <200 restriction**: if you have already bid or passed once,
-  you may not bid <200 on your next turn (you may still pass).
+- **Minimum increment on any turn** *(house rule, v2.2.12)*: on any
+  turn you may raise by the usual +10 minimum above the current high,
+  regardless of how many turns you've already taken. The old
+  "second-turn ≥ 200" floor was removed — it silently stopped a
+  legitimate 80 response to an opponent's 70.
 - **Partner-is-high restriction** *(house rule; tightened in v2.2.7)*:
   if the current high bidder is your partner, **you may not bid at
   all** — pass is your only action. The bid chips are hidden; the

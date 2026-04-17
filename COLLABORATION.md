@@ -113,6 +113,52 @@ Scopes: `docs`, `engine`, `ai`, `server`, `client`, `deploy`, `fix`, `style`.
 
 ## Current Status
 
+**v2.2.12 — Session 2026-04-17, Claude Opus 4.7 (live on Railway)**
+
+Shipped in this release chain (v2.2.11 → v2.2.12):
+- **Flashes linger longer** (~1.7×). Trump 3.5 s, trick 2.4 s, bid 4 s,
+  hand 6.5 s, match 7.5 s. Gives table talk time to catch up with the
+  UI.
+- **Inspect / hand-end pacing**. When AI is waiting to continue, the
+  INSPECT-phase delay is now 3.2–3.6 s (flash + ~1 s breathing room),
+  and HAND_END is 7.2–7.6 s. Tricks + hand result now stay on screen
+  long enough to read.
+- **Bid8 is strictly "one turn per seat".** New `state.bid8Acted[]`
+  flag; `handleBid8` + `advanceBid8` enforce it. After a `trump_pick2`
+  outbid we RESUME bid8 so the remaining seats still get their single
+  shot — previously the engine jumped straight to `open_choice` and
+  silenced the rest of the table.
+- **Bid4 rotation defensively skips all locked seats** (self-high,
+  partner-high, asker). "Other team responds, not you or your
+  teammate; higher bid wins in play order" is guaranteed by
+  construction.
+- **Removed the "2nd-turn ≥ 200 floor"** in bid4. It silently stopped
+  users from raising 70 to 80 on their second turn. `askedPartner`
+  still forces a 200 floor for both partners (deliberate commitment).
+- **Indicator card — caller view.** Always rendered face-up in its
+  separated slot; remains tappable whenever the engine says it's
+  legal (cut path, trick-8 forced lead, open-declare lead).
+- **Indicator card — non-caller view.** New labeled slot inside the
+  caller's opponent stack. Face-down while closed; flips face-up when
+  trump reveals (open declare / cut / auto-open); removed once the
+  indicator has been played. Back-stack count is auto-decremented
+  when the indicator is counted in-hand, so we don't double-render.
+
+Verification (all green after these changes):
+- `node scripts/bid-test.js` → 12 scenarios; no regression from the
+  floor removal or the bid8Acted tracking.
+- `node scripts/cut-test.js` → 4 scenarios.
+- `node scripts/smoke.js`, `soak.js 5` → tokens always = 22; no
+  deadlocks.
+
+Next-up priority (unchanged from v2.2.10):
+- Visual snapshot harness (Playwright).
+- Invite-link flow for 2nd human (`?room=ABCDEF&name=Dad`).
+- Animation polish: deal, trick sweep, token slide.
+- PCC 3-player mechanics.
+
+---
+
 **v2.2.6 — Session 2026-04-17, Claude Opus 4.7 (live on Railway)**
 
 Shipped in this release chain (v2.2.5 → v2.2.6):
@@ -328,3 +374,37 @@ Next-up priority:
   plus a small buffer. Don't tighten it without running layout-smoke
   at the target viewports — the bug manifests as clipped bottom
   rank/suit corners.
+- **[2026-04-17 / v2.2.11]** The indicator card is now rendered in
+  **two independent places**:
+    1. Caller's own hand row (`renderHand` in client.js) — always
+       face-up, tappable when legal, separated by the gold-badge
+       `.indicator-slot` wrapper.
+    2. Caller's opponent stack (`renderOpponentSeats`) — a scaled-down
+       `.indicator-slot.opp` injected INSIDE `.seat-cards`. Face-down
+       while `indicatorLocation === 'closed'`, face-up when
+       `'in-maker-hand'`, hidden when `'played'`.
+  The back-stack renders `handCounts[maker] - (indicatorInHandCount)`
+  cards to avoid double-rendering once the indicator is pushed into
+  the maker's hand (open phase). If you change either the view's
+  `indicatorLocation` / `indicatorCard` fields or the maker's hand
+  composition, re-eyeball both render paths.
+- **[2026-04-17 / v2.2.12]** Bid8 now uses `state.bid8Acted[]`
+  per-seat instead of the old single `bid8Turns` counter. The
+  counter is still there for backward-compat logging, but
+  termination + rotation use `bid8Acted`. Fixtures that seed
+  `PHASES.BID8` directly must also seed `bid8Acted` (or rely on
+  `handleBid8`'s defensive init, which only covers the top of that
+  function — `advanceBid8` has its own guard).
+- **[2026-04-17 / v2.2.12]** Flash durations are the **single lever**
+  that controls how long tricks / hands linger — the AI `INSPECT`
+  and `HAND_END` delays in `server.js` are tuned to match. If you
+  bump a flash duration, bump the corresponding AI delay too (≥
+  flash + 800 ms so the cards linger after the flash fades). Map:
+    - trick flash 2400 ms → INSPECT delay 3200–3600 ms
+    - hand  flash 6500 ms → HAND_END delay 7200–7600 ms
+- **[2026-04-17 / v2.2.12]** `minAllowedBid` was simplified — it used
+  to return 200 if `bidTurns[seat] >= 1`. That rule silently blocked
+  the screenshot case (AI called 70, user couldn't counter with 80).
+  If you re-introduce a second-turn floor, keep the chip-render side
+  in sync: the client suggests [160, 170, 180, 200, 210, 220, 250];
+  anything else is a `ghost` chip in an extras slot.

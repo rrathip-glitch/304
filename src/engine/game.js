@@ -146,12 +146,15 @@ function dealSecondBatch(state) {
 }
 
 function minAllowedBid(state, seat) {
-  const priorTurns = state.bidTurns[seat];
+  // v2.2.12: removed the "2nd-turn ≥ 200" floor. Household rule is
+  // simpler — on any turn you may bid ANY legal amount above the
+  // current high by 10+. The previous floor surfaced as a bug in the
+  // user screenshot: AI bid 70, user couldn't counter with 80 because
+  // they'd passed once and had been silently bumped to a 200 floor.
+  // The askedPartner floor (≥200 after a partner-ask) remains — that
+  // one is a deliberate commitment by both partners.
   const askedHere = state.askedPartner[seat];
-  let floor = 160;
-  if (priorTurns >= 1) floor = 200;
-  if (askedHere) floor = 200;
-  return floor;
+  return askedHere ? 200 : 160;
 }
 
 // Partner-is-high lockout (v2.2.7): if your partner is the current high

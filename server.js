@@ -140,7 +140,10 @@ function scheduleAITurn(room) {
     const anyHuman = hasAnyHuman(room);
     const aiSeat = firstAISeat(room);
     if (aiSeat === null) return;
-    const delay = anyHuman ? 1500 + Math.random() * 500 : 400 + Math.random() * 400;
+    // v2.2.12: with humans present, wait for the hand-won flash (6500 ms)
+    // to run its full course plus ~1 s so the trick cards linger on the
+    // table after the flash fades. AI-only tables still snap through fast.
+    const delay = anyHuman ? 7200 + Math.random() * 400 : 400 + Math.random() * 400;
     const token = {};
     room.aiQueue.push(token);
     setTimeout(() => {
@@ -161,14 +164,24 @@ function scheduleAITurn(room) {
   if (actor === null || actor === undefined) return;
   if (!shouldAIDriveSeat(room, actor)) return;
 
-  // Two delay regimes:
-  //  • AI seat → snap thinking time (600–1200 ms) for natural pacing.
+  // Three delay regimes (v2.2.12):
+  //  • AI seat, INSPECT phase → 3200–3600 ms, so the trick-won flash
+  //    (2400 ms) has time to play AND the trick cards linger for
+  //    roughly a second after the flash fades, per user request.
+  //  • AI seat, any other phase → snap thinking time (600–1200 ms).
   //  • Human seat with no socket (the "stall fallback") → 25 s grace
   //    period so a human reconnecting from a network blip doesn't get
   //    auto-played-over. If they're still gone after 25 s, AI takes the
   //    turn so the rest of the table isn't stuck.
   const isStallFallback = !isSeatAI(room, actor);
-  const delay = isStallFallback ? STALL_FALLBACK_MS : 600 + Math.random() * 600;
+  let delay;
+  if (isStallFallback) {
+    delay = STALL_FALLBACK_MS;
+  } else if (state.phase === PHASES.INSPECT) {
+    delay = 3200 + Math.random() * 400;
+  } else {
+    delay = 600 + Math.random() * 600;
+  }
   const token = {};
   room.aiQueue.push(token);
   setTimeout(() => {

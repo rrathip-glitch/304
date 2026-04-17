@@ -472,13 +472,54 @@ button { cursor: pointer; }
 .team { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .team .label { color: var(--cream-dim); text-transform: uppercase; letter-spacing: 1px; }
 .team-0 .label { color: var(--gold); }
-.pips { display: inline-flex; gap: 2px; flex-wrap: nowrap; align-items: center; }
-.pip {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--cream);
+/* v2.2.12: tokens now render as "<count> / 22" + a proportional bar.
+ * The fixed-pip rendering was retired because both teams always drew
+ * five dots regardless of actual count, which read the same at a glance
+ * (misleading on the only thing that matters — the split). */
+.pips {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  flex-wrap: nowrap;
+  min-width: 62px;
 }
-.team-1 .pip { background: #c89fa0; }
-.team-0 .pip { background: var(--gold); }
+.pips .pips-num {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--cream);
+}
+.pips .pips-of {
+  font-size: 10px;
+  color: var(--muted);
+  margin-right: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.pips .pips-bar {
+  display: inline-block;
+  width: 34px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  align-self: center;
+}
+.pips .pips-fill {
+  display: block;
+  height: 100%;
+  background: var(--cream);
+  border-radius: 2px;
+  transition: width 360ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.team-0 .pips-num { color: var(--gold); }
+.team-0 .pips-fill { background: var(--gold); }
+.team-1 .pips-num { color: #e6d0d2; }
+.team-1 .pips-fill { background: #c89fa0; }
+
+/* Legacy `.pip` class kept as a no-op for any stale markup (e.g.
+ * a pre-v2.2.12 cached client); hidden so the old dots don't leak. */
+.pip { display: none; }
 .head-right { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--cream-dim); flex-shrink: 0; }
 .hand-num { text-transform: uppercase; letter-spacing: 1px; }
 
