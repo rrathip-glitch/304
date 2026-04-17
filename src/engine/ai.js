@@ -216,7 +216,11 @@ function chooseOpenChoice(state, seat) {
   const hand = state.hands[seat];
   const s = handStrength(hand);
   const bidAmt = state.highBid ? state.highBid.amount : 0;
-  if (s.tops >= 6 && bidAmt >= 250) return { type: 'declareOpen' };
+  // Only the trick-1 leader (dealer's right) may declare open in v2.1.0,
+  // and the act commits them to leading the indicator on trick 1. Check
+  // both prerequisites before considering the call.
+  const canOpen = state.trumpMaker === ((state.dealer + 3) % 4);
+  if (canOpen && s.tops >= 6 && bidAmt >= 250) return { type: 'declareOpen' };
   return { type: 'declareClosed' };
 }
 

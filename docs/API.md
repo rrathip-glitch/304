@@ -83,6 +83,21 @@ See `docs/ARCHITECTURE.md#client-view-filtering`. Key fields:
   this trick. Cleared when the next trick begins. Drives the "CUT!" banner.
 - `cutWinnerSeat`: the seat that wins the trick when `cutResolved` is true
   (i.e., the cutter); `null` otherwise.
+- `openIndicatorId`: when an open declaration is in flight (trick 0 of
+  an open round, before the maker has led), this is the card id the
+  maker MUST lead. `null` outside that one-action window.
+
+### Bidding action gates (v2.1.0)
+
+- `bid` is omitted from `legalActions` when the recipient is already the
+  current high bidder (`highBid.bidder === yourSeat`). The engine also
+  rejects `{type:'bid', ...}` server-side as a defence-in-depth.
+- `declareOpen` is omitted from `legalActions` unless
+  `trumpMaker === (dealer + 3) % 4` (i.e., the maker is the trick-1
+  leader). When omitted, only `declareClosed` is offered.
+- After the first 4-card bid lands and every other seat passes, the
+  engine auto-advances to `trump_pick1` — clients receive a
+  `view` with the new phase rather than another bid prompt.
 
 ### Cutting visibility (`currentTrick` per-seat filter)
 

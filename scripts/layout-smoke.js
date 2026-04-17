@@ -90,13 +90,14 @@ const html = read('public/index.html');
 assert(/id="your-trump"/.test(html), 'index.html has the trump indicator slot');
 assert(/id="your-hand"/.test(html), 'index.html has the player hand slot');
 assert(/id="phase-banner"/.test(html), 'index.html has the phase banner');
-assert(/v=2\.0\.0/.test(html), 'index.html uses semver cache-bust marker (v2.0.0)');
+assert(/v=2\.1\.0/.test(html), 'index.html uses semver cache-bust marker (v2.1.0)');
+assert(/id="bid-strip"/.test(html), 'index.html has the bid-strip element');
 
 // -- Client behavior checks (parse client.js for the expected hooks) -------
 const client = read('public/client.js');
 assert(
-  /BUILD\s*=\s*'2\.0\.0'/.test(client),
-  'client.js declares BUILD = "2.0.0" (semver, not codename)',
+  /BUILD\s*=\s*'2\.1\.0'/.test(client),
+  'client.js declares BUILD = "2.1.0" (semver, not codename)',
 );
 assert(
   /isTappable\s*=\s*legalIds\.has\(v\.trumpIndicator\.id\)/.test(client),
@@ -109,6 +110,14 @@ assert(
 assert(
   /cannotFollowSuit/.test(client),
   'client.js exposes the cut prompt (cannotFollowSuit helper)',
+);
+assert(
+  /renderBidStrip/.test(client),
+  'client.js renders the current-bid strip (visible across bidding + play)',
+);
+assert(
+  /Declare open \(lead indicator\)/.test(client),
+  'client.js spells out the open consequence in the chip label',
 );
 
 // -- Engine behavior checks (parse game.js) --------------------------------
@@ -128,6 +137,29 @@ assert(
 assert(
   /if \(hasIndicator\) ids\.push\(indicatorId\)/.test(game),
   'game.js includes the trump indicator in legalCardIds when can\'t follow (cut path)',
+);
+assert(
+  /you are already the high bidder/.test(game),
+  'game.js rejects self-overbid (bid4 + bid8)',
+);
+assert(
+  /openIndicatorId/.test(game),
+  'game.js tracks openIndicatorId for the open-trick-1 lead constraint',
+);
+assert(
+  /only the trick-1 leader may declare open/.test(game),
+  'game.js rejects declareOpen unless maker leads trick 1',
+);
+assert(
+  /must lead the trump indicator on trick 1/.test(game),
+  'game.js enforces leading the indicator on trick 1 in open',
+);
+
+// -- AI behavior check ------------------------------------------------------
+const ai = read('src/engine/ai.js');
+assert(
+  /state\.trumpMaker === \(\(state\.dealer \+ 3\) % 4\)/.test(ai),
+  'ai.js gates declareOpen on the same trick-1-leader rule (avoids illegal action)',
 );
 
 // -- Summary ---------------------------------------------------------------

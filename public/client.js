@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.0.0';
+  const BUILD = '2.1.0';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -472,6 +472,10 @@
     phaseEl.classList.toggle('your-turn', isYourTurn && !cutting);
     phaseEl.classList.toggle('cutting', cutting);
 
+    // Bid strip — visible across bidding AND play so the stake is
+    // always one glance away.
+    renderBidStrip(v);
+
     // Seats
     renderOpponentSeats(v);
     renderYouSeat(v);
@@ -484,6 +488,42 @@
 
     // Log
     renderLog(v.log || []);
+  }
+
+  function renderBidStrip(v) {
+    const el = $('#bid-strip');
+    if (!el) return;
+    el.innerHTML = '';
+    if (!v || !v.highBid) return;
+
+    const label = document.createElement('span');
+    label.className = 'bid-strip-label';
+    label.textContent = (v.phase === 'play' || v.phase === 'inspect' || v.phase === 'hand_end')
+      ? 'Bid this hand'
+      : 'Current bid';
+    el.appendChild(label);
+
+    const value = document.createElement('span');
+    value.className = 'bid-strip-value';
+    value.textContent = displayBid(v.highBid.amount);
+    el.appendChild(value);
+
+    const bidder = document.createElement('span');
+    bidder.className = 'bid-strip-bidder';
+    const bidderName = nameOfSeat(v.highBid.bidder);
+    const youAreBidder = v.highBid.bidder === state.yourSeat;
+    bidder.textContent = 'by ' + (youAreBidder ? 'you' : bidderName);
+    el.appendChild(bidder);
+
+    // Show trump suit during play if it's revealed (or if you're the maker
+    // and it's still closed — they know it themselves).
+    if (v.trumpSuit && (v.trumpRevealed || v.isOpenTrump || v.trumpMaker === state.yourSeat)) {
+      const trump = document.createElement('span');
+      trump.className = 'bid-strip-trump';
+      const open = (v.isOpenTrump || v.trumpRevealed) ? '· open' : '· closed';
+      trump.textContent = '· trump ' + suitName(v.trumpSuit) + ' ' + open;
+      el.appendChild(trump);
+    }
   }
 
   function nameOfSeat(seat) {
@@ -736,7 +776,12 @@
         case 'pass': addChip(chipsEl, 'Pass', 'pass', () => emitAction({ type: 'pass' })); break;
         case 'askPartner': addChip(chipsEl, 'Ask partner', '', () => emitAction({ type: 'askPartner' })); break;
         case 'demandRedeal': addChip(chipsEl, 'Demand redeal', 'danger', () => emitAction({ type: 'demandRedeal' })); break;
-        case 'declareOpen': addChip(chipsEl, 'Declare open', 'primary', () => emitAction({ type: 'declareOpen' })); break;
+        case 'declareOpen':
+          // The act of declaring open commits the maker to leading the
+          // indicator on trick 1 — surface that in the chip label so it's
+          // not a surprise.
+          addChip(chipsEl, 'Declare open (lead indicator)', 'primary', () => emitAction({ type: 'declareOpen' }));
+          break;
         case 'declareClosed': addChip(chipsEl, 'Play closed', '', () => emitAction({ type: 'declareClosed' })); break;
         case 'continue': addChip(chipsEl, 'Continue', 'primary', () => emitAction({ type: 'continue' })); break;
         case 'playCard': {

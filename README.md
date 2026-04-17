@@ -1,6 +1,6 @@
 # 304 — Mobile Multiplayer Card Game
 
-[![version](https://img.shields.io/badge/version-2.0.0-blue.svg)](#release-notes)
+[![version](https://img.shields.io/badge/version-2.1.0-blue.svg)](#release-notes)
 
 A web-based implementation of **304**, a Sri Lankan trick-taking card game.
 Built mobile-first for seamless play between two humans (e.g. you and your
@@ -35,6 +35,24 @@ Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Release Notes
 
+### v2.1.0 — 2026-04-17
+
+- **No bidding over yourself.** Once you're the high bidder, the bid
+  chips disappear from your action bar; you can only pass or wait to be
+  outbid. Applies to both 4-card and 8-card rounds.
+- **Open declaration is now committal.** You may only declare open if
+  you also lead trick 1 (i.e., sit at the dealer's right). Doing so
+  forces you to lead the (former) trump indicator card on trick 1 — the
+  act of laying it on the table is what reveals the suit.
+- **Current-bid strip** above the table — visible across bidding AND
+  gameplay so the stake is always one glance away. Shows amount,
+  bidder, trump suit + open/closed status.
+- **Auto-resolve** on bid + 3 passes (was already the engine behavior;
+  now explicitly documented and tested).
+- New tests: `node scripts/bid-test.js` (31 assertions across 5
+  scenarios). `layout-smoke.js` extended to 30 assertions covering the
+  new rules.
+
 ### v2.0.0 — 2026-04-17
 
 - **Cutting mechanic with full UX.** When you can't follow suit the
@@ -68,7 +86,7 @@ git merge <feature-branch> --no-edit
 git push origin claude/mobile-game-development-GifG7
 # wait ~60s, then:
 curl https://<your-app>.up.railway.app/version
-# → {"version":"2.0.0","startedAt":"..."}
+# → {"version":"2.1.0","startedAt":"..."}
 ```
 
 If `version` matches `package.json#version`, you're live. Full procedure,
@@ -78,8 +96,9 @@ troubleshooting, and rollback steps are in
 ## Tests
 
 ```bash
-node scripts/layout-smoke.js   # 22 structural assertions
+node scripts/layout-smoke.js   # 30 structural assertions
 node scripts/cut-test.js       # 24 engine assertions, 3 cut scenarios
+node scripts/bid-test.js       # 31 engine assertions, 5 bid + open scenarios
 node scripts/smoke.js          # one full 4-AI match
 node scripts/soak.js 5         # 5 matches; token invariant
 node scripts/e2e.js            # boots server, drives socket

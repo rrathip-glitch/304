@@ -61,6 +61,7 @@ function createGame(roomId = '') {
     pendingSecondBatch: null,
     dealtFirstBatch: false,
     cutResolved: false,
+    openIndicatorId: null,
   };
 }
 
@@ -103,6 +104,7 @@ function startHand(state, rng = Math.random) {
   state.lastTrick = null;
   state.dealtFirstBatch = true;
   state.cutResolved = false;
+  state.openIndicatorId = null;
 
   const deck = cards.shuffle(cards.makeDeck(), rng);
   state.pendingSecondBatch = deck.slice(16);
@@ -201,6 +203,13 @@ function handleBid4(state, seat, action) {
     const amount = action.amount | 0;
     if (amount % 10 !== 0) return fail('bids must be multiples of 10');
     if (amount < 160) return fail('minimum bid is 160');
+    // House rule (v2.1.0): you cannot bid over yourself. Once you're the
+    // current high bidder, your only options on a future turn are to pass
+    // (or wait for someone else to outbid you). Removing the self-overbid
+    // path makes the conversation around the table simpler — there's no
+    // tactical reason to inflate your own bid in 304, and the UI was
+    // surfacing the option in error.
+    if (state.highBid && state.highBid.bidder === seat) return fail('you are already the high bidder');
     const floor = minAllowedBid(state, seat);
     if (amount < floor) return fail(`your bid floor is ${floor}`);
     if (state.highBid && amount <= state.highBid.amount) return fail('must exceed current high bid');
@@ -300,6 +309,10 @@ function handleBid8(state, seat, action) {
     const amount = action.amount | 0;
     if (amount % 10 !== 0) return fail('bids must be multiples of 10');
     if (amount < 250) return fail('minimum 8-card bid is 250');
+    // No bidding over yourself in the 8-card round either. The current
+    // high bidder (typically the trump maker entering the round) has no
+    // self-raise path — they can only pass, or wait to be outbid.
+    if (state.highBid && state.highBid.bidder === seat) return fail('you are already the high bidder');
     if (state.highBid && amount <= state.highBid.amount) return fail('must exceed current high bid');
     const lastBid = [...state.bids].reverse().find((b) => b.type === 'bid' && b.round === 8);
     if (lastBid && lastBid.seat === partner) return fail('cannot bid after partner');
@@ -342,14 +355,21 @@ function advanceBid8(state) {
 function handleOpenChoice(state, seat, action) {
   if (seat !== state.trumpMaker) return fail('only trump maker chooses');
   if (action.type === 'declareOpen') {
+    // House rule (v2.1.0): you can only declare open if you also lead
+    // trick 1 (i.e., you sit at the dealer's right). The "open" itself
+    // is committed by leading the (former) indicator card on trick 1 —
+    // see legalCardIds + handlePlay below.
+    if (state.trumpMaker !== next(state.dealer)) return fail('only the trick-1 leader may declare open');
+    if (!state.trumpIndicator) return fail('no indicator to reveal');
     state.isOpenTrump = true;
     state.trumpRevealed = true;
-    if (state.trumpIndicator) {
-      state.hands[state.trumpMaker].push(state.trumpIndicator);
-    }
-    log(state, `${state.seats[seat].name} declared OPEN. Trump is ${state.trumpSuit}.`);
+    state.openIndicatorId = state.trumpIndicator.id;
+    state.hands[state.trumpMaker].push(state.trumpIndicator);
+    state.trumpIndicator = null;
+    log(state, `${state.seats[seat].name} declared OPEN. Trump is ${state.trumpSuit}. Must lead the indicator on trick 1.`);
   } else if (action.type === 'declareClosed') {
     state.isOpenTrump = false;
+    state.openIndicatorId = null;
     log(state, `${state.seats[seat].name} kept the trump closed.`);
   } else {
     return fail('expected declareOpen/declareClosed');
@@ -400,6 +420,14 @@ function handlePlay(state, seat, action) {
         return fail('first trick lead cannot be trump in closed game');
       }
     }
+    // Open-round commitment (v2.1.0): on trick 1 the trump caller MUST
+    // lead the (former) indicator — the act of laying it on the table
+    // reveals the suit to everyone and crystallises the "open" call.
+    if (state.isOpenTrump && state.tricksPlayed === 0 && seat === state.trumpMaker && state.openIndicatorId) {
+      if (card.id !== state.openIndicatorId) {
+        return fail('open declaration: must lead the trump indicator on trick 1');
+      }
+    }
     if (state.isOpenTrump || state.trumpRevealed) {
       const exhausted = exhaustedTrumpCheck(state, seat, card);
       if (exhausted) return fail(exhausted);
@@ -422,6 +450,11 @@ function handlePlay(state, seat, action) {
   if (idx >= 0) hand.splice(idx, 1);
   if (isIndicator) {
     state.trumpIndicator = null;
+  }
+  // Once the open-mode indicator has been led, the constraint is satisfied
+  // and any future trump-suit card is a normal play.
+  if (state.openIndicatorId && card.id === state.openIndicatorId) {
+    state.openIndicatorId = null;
   }
   const played = {
     seat,
@@ -568,7 +601,12 @@ function handleHandEnd(state, seat, action) {
 function legalActions(state, seat) {
   if (state.phase === PHASES.BID4 && seat === state.currentBidder) {
     const list = [];
-    const amts = bidAmountsLegal(state, seat);
+    // No self-overbid: if you're already the high bidder, your only path
+    // is to pass (or askPartner / demandRedeal on first turn — both are
+    // already gated on bidTurns === 0, so neither overlaps with this case
+    // since to be the high bidder you've already bid once).
+    const isHighBidder = state.highBid && state.highBid.bidder === seat;
+    const amts = isHighBidder ? [] : bidAmountsLegal(state, seat);
     if (amts.length) list.push({ type: 'bid', amounts: amts });
     list.push({ type: 'pass' });
     if (state.bidTurns[seat] === 0 && state.seats[partnerOf(seat)]) {
@@ -584,7 +622,11 @@ function legalActions(state, seat) {
   }
   if (state.phase === PHASES.BID8 && seat === state.currentBidder) {
     const list = [];
-    const amts = bid8AmountsLegal(state);
+    // Same no-self-overbid rule applies in the 8-card round. The trump
+    // maker enters bid8 as the high bidder by definition; their only
+    // option is to pass (waiting to see if anyone outbids them).
+    const isHighBidder = state.highBid && state.highBid.bidder === seat;
+    const amts = isHighBidder ? [] : bid8AmountsLegal(state);
     const lastBid = [...state.bids].reverse().find((b) => b.type === 'bid' && b.round === 8);
     const partnerJustBid = lastBid && lastBid.seat === partnerOf(seat);
     if (amts.length && !partnerJustBid) list.push({ type: 'bid', amounts: amts });
@@ -595,7 +637,14 @@ function legalActions(state, seat) {
     return [{ type: 'pickTrump', cardIds: state.hands[seat].map((c) => c.id) }];
   }
   if (state.phase === PHASES.OPEN_CHOICE && seat === state.trumpMaker) {
-    return [{ type: 'declareOpen' }, { type: 'declareClosed' }];
+    // House rule (v2.1.0): only offer the "Declare open" choice if the
+    // trump maker is also the trick-1 leader (dealer's right). If
+    // someone else leads, the maker has no opportunity to declare open
+    // before the first card hits the table — the engine fast-paths
+    // through this phase (see handleTrumpPick / handleBid8 advance).
+    const makerLeadsFirstTrick = state.trumpMaker === next(state.dealer);
+    if (makerLeadsFirstTrick) return [{ type: 'declareOpen' }, { type: 'declareClosed' }];
+    return [{ type: 'declareClosed' }];
   }
   if (state.phase === PHASES.PLAY && seat === state.currentPlayer) {
     return [{ type: 'playCard', cardIds: legalCardIds(state, seat) }];
@@ -620,6 +669,14 @@ function legalCardIds(state, seat) {
   if (!hand || hand.length === 0) return [];
 
   if (isLead) {
+    // Open-round trick 1: the trump maker must lead the (former)
+    // indicator card. Single legal card.
+    if (state.isOpenTrump && state.tricksPlayed === 0 && seat === state.trumpMaker && state.openIndicatorId) {
+      const ind = hand.find((c) => c.id === state.openIndicatorId);
+      if (ind) return [ind.id];
+      // Defensive: indicator missing from hand (should never happen in a
+      // legitimate open declaration). Fall through to the standard rules.
+    }
     // Primary filter: indicator restriction + first-trick no-trump + exhausted-trump
     const strict = [];
     for (const c of hand) {

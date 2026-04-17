@@ -207,5 +207,66 @@ fail CI before it ships.
 
 ---
 
+## 2026-04-17 — No bidding over yourself (bid4 + bid8) — v2.1.0
+
+**Decision:** Once a player is the current high bidder, `bid` is removed
+from their `legalActions` for the rest of that round. The engine also
+rejects `{type:'bid'}` from that seat as belt-and-suspenders.
+
+**Source:** User message ("I should not be able to bet over myself").
+
+**Rationale:** There's no tactical reason in 304 to inflate your own
+bid. The previous UI surfaced bid chips even when the seat was the
+high bidder, which produced confusing flows in bid8 (the maker entered
+the round as high bidder by definition and could pointlessly raise
+themselves). The rule applies symmetrically to both rounds.
+
+---
+
+## 2026-04-17 — Open declaration gated on trick-1 leadership + must lead the indicator — v2.1.0
+
+**Decision:** The `declareOpen` action is offered only when
+`trumpMaker === next(dealer)` (the maker also leads trick 1).
+A successful declaration sets `state.openIndicatorId` to the
+indicator's card id. On trick 1 the maker's `legalCardIds` is
+restricted to that single id, and `handlePlay` rejects any other lead
+with "open declaration: must lead the trump indicator on trick 1".
+The flag clears the moment the indicator is played.
+
+**Source:** User messages
+- "I should only have the option to go open if I am also the one
+  opening the first trick"
+- "On open rounds the trump also has to be played in the first trick by
+  the trump caller revealing it to everyone and hence the open
+  designation"
+
+**Rationale:** Matches the in-person ritual — declaring open IS the act
+of laying the indicator face-up on the first trick. Turning it into a
+phase-only choice (v1) divorced the declaration from the commitment
+that proves it. The new model also means an opponent can't be sandbagged
+into expecting an open game when the maker isn't even leading.
+
+The AI's `chooseOpenChoice` is updated to honour the same gate so it
+never produces an illegal `declareOpen` action.
+
+---
+
+## 2026-04-17 — Visible bid strip across bidding + play — v2.1.0
+
+**Decision:** Add `#bid-strip` to the table screen, populated by
+`renderBidStrip()` whenever `view.highBid` exists. Shows the amount,
+the bidder's name (or "you"), and (where appropriate) the trump suit +
+open/closed status.
+
+**Source:** User message ("create a ui indicator for current betting
+round value for both the betting and gameplay face").
+
+**Rationale:** v1 hid the high bid behind seat avatars; mid-hand a
+player who looked away briefly couldn't tell what the team was chasing.
+The strip is `display: none` while empty so it adds zero vertical space
+when bidding hasn't started.
+
+---
+
 *Append new entries below this line. Do not modify prior entries — if a
 decision is reversed, add a new entry that references and supersedes it.*

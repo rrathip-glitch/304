@@ -11,10 +11,11 @@ green/red within seconds.
 | `node scripts/smoke.js` | One full 4-AI match end-to-end. Asserts token invariant (always sums to 22). | < 1 s |
 | `node scripts/soak.js 5` | Five back-to-back matches. Catches drift + rare deadlocks. | 1–3 s |
 | `node scripts/cut-test.js` | Engine unit tests for the cutting mechanic: maker peek, hidden-from-others, trump-cut wins trick, cutting team leads next, indicator-as-cut. | < 1 s |
-| `node scripts/layout-smoke.js` | Static analysis of `public/styles.css`, `public/index.html`, `public/client.js`, `src/engine/game.js` to lock in safe-area, clamp() scaling, vertical-stack overflow caps, semver markers, maker-peek wiring. | < 1 s |
+| `node scripts/bid-test.js` | Engine unit tests for v2.1.0 bidding rules: no self-overbid (bid4 + bid8), bid+3-passes auto-resolves, open choice gated on trick-1 leadership, open declaration forces leading the indicator. | < 1 s |
+| `node scripts/layout-smoke.js` | Static analysis of `public/styles.css`, `public/index.html`, `public/client.js`, `src/engine/game.js`, `src/engine/ai.js` to lock in safe-area, clamp() scaling, vertical-stack overflow caps, semver markers, maker-peek wiring, bid-strip presence, open-choice gates. | < 1 s |
 | `node scripts/e2e.js` | Boots `server.js`, opens a Socket.IO client, drives a real handshake. Verifies room create + join + start emits the expected views. | 2–4 s |
 
-All five are green as of the v2.0.0 commit.
+All six are green as of the v2.1.0 commit.
 
 ## CI sequence
 
@@ -22,6 +23,7 @@ All five are green as of the v2.0.0 commit.
 npm install
 node scripts/layout-smoke.js   # cheapest; fails fast on style/structure regressions
 node scripts/cut-test.js
+node scripts/bid-test.js
 node scripts/smoke.js
 node scripts/soak.js 5
 node scripts/e2e.js
@@ -70,6 +72,32 @@ remaining seats automatically.
    - Cutting team gets the trick; your seat leads the next trick.
 6. If no trump was cut, face-downs stay backs forever; the highest card of
    the lead suit wins.
+
+### Bidding rules (new in v2.1.0)
+1. Bid 200 as the first bidder. Verify the bid chips disappear from
+   your action bar — only `Pass` (and `Ask partner` / `Demand redeal`
+   on first turn) remain.
+2. Have the other three pass. The hand should auto-advance to "Pick
+   trump indicator" with you as the trump maker. No extra confirmation.
+3. After picking trump and dealing the second batch, you (as trump
+   maker = current high bidder) start bid8. Verify only `Pass` is
+   offered — no bid chips.
+4. The bid strip at the top should read `BID 20 by you · trump <suit>
+   · closed` (numbers depend on your bid).
+
+### Open declaration (new in v2.1.0)
+1. Set up a hand where you (the trump maker) sit at the dealer's right
+   (i.e., you would lead trick 1).
+2. The open-choice screen offers BOTH `Declare open (lead indicator)`
+   and `Play closed`.
+3. Tap `Declare open …`. The trump indicator card joins your hand.
+4. On the very first trick, only the (former) indicator card is
+   highlighted as legal — every other card in your hand is unlit.
+   Tapping a non-indicator shows a toast "open declaration: must lead
+   the trump indicator on trick 1".
+5. Now repeat with a hand where you are NOT the trick-1 leader. The
+   open-choice screen offers ONLY `Play closed` — no `Declare open`
+   chip at all.
 
 ### Trump indicator selectability (regression)
 The previous build left the maker stuck when the indicator was their only

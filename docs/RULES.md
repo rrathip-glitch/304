@@ -49,6 +49,13 @@ Household variant source: user messages dated 2026-04-16 (see DECISIONS.md).
 - Minimum bid: **160**. All bids are multiples of **10**.
 - Each bid must exceed the prior high bid.
 - A player may **pass** at their turn.
+- **No bidding over yourself** *(house rule, v2.1.0)*: once you are the
+  current high bidder, you cannot bid again. Your only options on a
+  future turn are to pass or wait to be outbid. The UI hides the bid
+  chips for the high bidder; the engine rejects the action defensively.
+- **Auto-resolution**: if you bid and every other active player passes,
+  the bid stands and the engine advances to trump pick automatically —
+  no further confirmation needed.
 - **Second-turn <200 restriction**: if you have already bid or passed once,
   you may not bid <200 on your next turn (you may still pass).
 - **Partner-is-high restriction**: if the current high bidder is your
@@ -76,6 +83,9 @@ Household variant source: user messages dated 2026-04-16 (see DECISIONS.md).
 - Happens after the second batch is dealt.
 - Starts with the current high bidder, proceeds counter-clockwise, **one
   turn each**, no re-bidding.
+- **No bidding over yourself** *(house rule, v2.1.0)*: the trump maker
+  enters bid8 as the high bidder by definition; their only option is
+  pass. They cannot self-raise their own 4-card bid.
 - **Minimum bid: 250**. Must exceed the 4-card high bid.
 - Household convention: **rarely goes above 260**. The AI should only bid
   higher than 260 with extraordinary hands (6+ top cards).
@@ -127,10 +137,19 @@ Household variant source: user messages dated 2026-04-16 (see DECISIONS.md).
   face-down still wins per normal trump-card precedence.
 
 ### Open
-- The trump maker may **declare open** before the first card is led.
-  The indicator is flipped face-up, shown to all, returned to hand
-  (trump maker now has 8 cards).
-- All subsequent play is face-up, standard rules.
+- The trump maker may **declare open** before the first card is led —
+  but only if **they also lead trick 1** (i.e., they sit at the dealer's
+  right). If someone else leads, the open option is not offered; the
+  game plays closed by default.
+- The act of declaring open commits the maker to **leading the (former)
+  trump indicator card on trick 1**. Laying the indicator on the table
+  is *what* reveals the suit publicly; it's the open declaration in
+  card form.
+- The indicator is removed from "face-down" status and joins the maker's
+  hand (8 cards). On trick 1, the only legal lead for the maker is that
+  specific card.
+- After the indicator has been led, all subsequent play is face-up,
+  standard rules.
 
 ### Auto-open after Trick 1 (bid ≥ 250)
 - If the final bid (either round) is ≥ 250 and the game started closed,
