@@ -462,5 +462,47 @@ conservative — every player's discard privacy is protected.
 
 ---
 
+## 2026-04-17 — Trump maker face-down: indicator or disposal only; no custom-bid input — v2.2.5
+
+**Two related changes:**
+
+### 1. Trump maker's face-down play is constrained
+
+The trump maker's only legal face-down plays in a closed game are:
+- **Disposal** — a non-trump card from hand (stays hidden forever).
+- **Cut** — the trump indicator itself (revealed at trick end).
+
+A non-indicator trump from the maker's hand is NEVER a legal
+face-down play. `legalCardIds` filters them out for the maker in
+closed-and-can't-follow context; `handlePlay` rejects them
+server-side with `"trump maker cannot play a non-indicator trump
+face-down"`.
+
+**Rationale:** per user rule, whenever the maker cuts, the card that
+gets flipped face-up is by definition the indicator. Forbidding
+hand-trumps as face-down cuts preserves that invariant and makes
+the mental model for every seat at the table crisper.
+
+**Non-maker cutters are unaffected** — they don't hold an indicator,
+and their cut logic already worked.
+
+### 2. Custom-bid input removed
+
+`renderBidAction` no longer renders the free-form numeric input or
+the secondary "Bid" button. Every legal bid amount is surfaced as a
+tappable chip (common amounts as solid chips; rare amounts as ghost
+chips, up to 6). Avoids typos, ambiguous manual entry, and the UX
+disconnect where the display ladder (60/70/…/140/250) didn't match
+the digits users typed (160/170/…).
+
+**Tests:**
+- `scripts/cut-test.js#Test 4` — 10 new assertions covering the
+  maker face-down restriction (legalCardIds filter + engine reject +
+  disposal path still works).
+- `scripts/layout-smoke.js` — asserts the custom input and the
+  bid-input placeholder are both gone.
+
+---
+
 *Append new entries below this line. Do not modify prior entries — if a
 decision is reversed, add a new entry that references and supersedes it.*

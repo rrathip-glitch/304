@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.5';
+  const BUILD = '2.2.6';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -883,6 +883,10 @@
   }
 
   function renderBidAction(action, chipsEl, extrasEl) {
+    // v2.2.5: custom-bid input removed. Every legal bid amount is
+    // surfaced as a tappable chip. Bids that aren't in the common
+    // ladder (rare, e.g. after odd opponent bids) get a `ghost` chip.
+    // No free-form entry — avoids typos and ambiguity.
     const suggested = [160, 170, 180, 200, 210, 220, 250];
     const allowed = Array.isArray(action.amounts) ? action.amounts : suggested;
     const allowedSet = new Set(allowed);
@@ -891,31 +895,10 @@
     for (const amt of chipVals) {
       addChip(chipsEl, displayBid(amt), '', () => emitAction({ type: 'bid', amount: amt }));
     }
-    // Also any allowed bids not in suggested set (rare amounts)
     const extras = allowed.filter((v) => !chipVals.includes(v));
-    for (const amt of extras.slice(0, 3)) {
+    for (const amt of extras.slice(0, 6)) {
       addChip(chipsEl, displayBid(amt), 'ghost', () => emitAction({ type: 'bid', amount: amt }));
     }
-
-    // Custom input
-    const wrap = document.createElement('div');
-    wrap.className = 'bid-custom';
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.step = '10';
-    input.min = String(Math.min.apply(null, allowed));
-    input.className = 'bid-input';
-    input.placeholder = 'custom';
-    const go = document.createElement('button');
-    go.className = 'chip primary';
-    go.textContent = 'Bid';
-    go.addEventListener('click', () => {
-      const raw = parseInt(input.value, 10);
-      if (!raw || raw % 10 !== 0) { toast('Bids are multiples of 10'); return; }
-      emitAction({ type: 'bid', amount: raw });
-    });
-    extrasEl.appendChild(input);
-    extrasEl.appendChild(go);
   }
 
   function emitAction(payload) {

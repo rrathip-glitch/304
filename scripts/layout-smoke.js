@@ -90,14 +90,14 @@ const html = read('public/index.html');
 assert(/id="your-trump"/.test(html), 'index.html has the trump indicator slot');
 assert(/id="your-hand"/.test(html), 'index.html has the player hand slot');
 assert(/id="phase-banner"/.test(html), 'index.html has the phase banner');
-assert(/v=2\.2\.5/.test(html), 'index.html uses semver cache-bust marker (v2.2.5)');
+assert(/v=2\.2\.6/.test(html), 'index.html uses semver cache-bust marker (v2.2.6)');
 assert(/id="bid-strip"/.test(html), 'index.html has the bid-strip element');
 
 // -- Client behavior checks (parse client.js for the expected hooks) -------
 const client = read('public/client.js');
 assert(
-  /BUILD\s*=\s*'2\.2\.5'/.test(client),
-  'client.js declares BUILD = "2.2.5" (semver, not codename)',
+  /BUILD\s*=\s*'2\.2\.6'/.test(client),
+  'client.js declares BUILD = "2.2.6" (semver, not codename)',
 );
 assert(
   /isTappable\s*=\s*legalIds\.has\(v\.trumpIndicator\.id\)/.test(client),
@@ -177,6 +177,18 @@ assert(
 assert(
   /if \(!isBiddingPhase\) return ''/.test(client),
   'client.js bidLabelFor returns empty outside bidding phases (no stale per-seat labels)',
+);
+assert(
+  !/placeholder\s*=\s*['"]custom['"]/.test(client),
+  'client.js has NO custom-bid input (v2.2.5 removed free-form entry)',
+);
+assert(
+  !/class\s*=\s*['"]bid-input['"]/.test(client) || !/type\s*=\s*['"]number['"]/.test(client),
+  'client.js has no bid-input number field',
+);
+assert(
+  /trump maker cannot play a non-indicator trump face-down/.test(game),
+  'game.js rejects maker\'s non-indicator trump face-down (v2.2.5)',
 );
 
 // -- AI behavior check ------------------------------------------------------

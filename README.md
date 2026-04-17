@@ -1,6 +1,6 @@
 # 304 — Mobile Multiplayer Card Game
 
-[![version](https://img.shields.io/badge/version-2.2.5-blue.svg)](#release-notes)
+[![version](https://img.shields.io/badge/version-2.2.6-blue.svg)](#release-notes)
 
 A web-based implementation of **304**, a Sri Lankan trick-taking card game.
 Built mobile-first for seamless play between two humans (e.g. you and your
@@ -35,7 +35,7 @@ Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Release Notes
 
-### v2.2.5 — 2026-04-17
+### v2.2.6 — 2026-04-17
 
 - **Hand row no longer clips the bottom rank.** `.your-hand` had an
   off-by-4 between its `min-height` and its padding, so with
@@ -49,6 +49,21 @@ Full rules are in [`docs/RULES.md`](docs/RULES.md).
   "TRUMP CLOSED" to everyone else during a closed game. The suit
   glyph is rendered on a cream disc in its native red/black colour
   so hearts/diamonds stay legible on the dark felt header.
+- **Server quality pass.** Dead state fields (`closeCaps`,
+  `dealtFirstBatch`, `bid8Passes`, `highBid.isCloseCaps`) removed;
+  `whoseTurn` centralised in the engine; timing constants hoisted;
+  lobby handlers (`setSeat`/`addAI`/`removeAI`) consistently reset
+  the idle-GC timer.
+
+### v2.2.5 — 2026-04-17
+
+- **Trump caller's face-down is restricted.** The caller's only
+  legal face-down plays are a non-trump (disposal) OR the trump
+  indicator itself (cut). Non-indicator trumps from the caller's
+  hand can never go face-down — they stay in hand until the game
+  opens.
+- **Custom-bid input removed.** Every legal bid amount is now a
+  tappable chip; no free-form numeric entry.
 
 ### v2.2.4 — 2026-04-17
 
@@ -160,7 +175,7 @@ git merge <feature-branch> --no-edit
 git push origin claude/mobile-game-development-GifG7
 # wait ~60s, then:
 curl https://<your-app>.up.railway.app/version
-# → {"version":"2.2.4","startedAt":"..."}
+# → {"version":"2.2.5","startedAt":"..."}
 ```
 
 If `version` matches `package.json#version`, you're live. Full procedure,
