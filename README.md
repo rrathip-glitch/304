@@ -57,10 +57,23 @@ Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Deployment (Railway)
 
-Push to GitHub, create a Railway project from the repo. Railway uses the
-`Dockerfile` to build. The `PORT` env var is set automatically.
+Railway watches **`claude/mobile-game-development-GifG7`**. Pushing to
+that branch triggers an auto-build via `Dockerfile`; Railway sets `PORT`
+itself. To ship a release:
 
-See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+```bash
+# from a feature branch, after running the test suite below:
+git checkout claude/mobile-game-development-GifG7
+git merge <feature-branch> --no-edit
+git push origin claude/mobile-game-development-GifG7
+# wait ~60s, then:
+curl https://<your-app>.up.railway.app/version
+# → {"version":"2.0.0","startedAt":"..."}
+```
+
+If `version` matches `package.json#version`, you're live. Full procedure,
+troubleshooting, and rollback steps are in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Tests
 
@@ -71,6 +84,10 @@ node scripts/smoke.js          # one full 4-AI match
 node scripts/soak.js 5         # 5 matches; token invariant
 node scripts/e2e.js            # boots server, drives socket
 ```
+
+All five must be green before pushing to the watched branch. Full
+test scenarios (including manual mobile-UX checks) are in
+[`docs/TESTING.md`](docs/TESTING.md).
 
 ## Documentation for Future Contributors (Human or AI)
 

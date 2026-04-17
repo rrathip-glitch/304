@@ -25,9 +25,20 @@ Run these in order. Don't skip.
 2. Read `docs/TASKS.md` — what's the current state of the project?
 3. Read `docs/ARCHITECTURE.md` — where do things live?
 4. Read `docs/RULES.md` — what game are we implementing exactly?
-5. `git status` and `git log --oneline -20` — where did the last session end?
-6. `ls src/` and `ls public/` — what modules exist?
-7. Skim `src/engine/cards.js` — the lowest-level module, anchors vocabulary.
+5. Read `docs/DEPLOYMENT.md` — how does code reach production?
+   (Watched branch is `claude/mobile-game-development-GifG7`; feature
+   work merges into it.)
+6. `git status`, `git log --oneline -20`, `git branch --show-current` —
+   where did the last session end and which branch are you on?
+7. `ls src/` and `ls public/` — what modules exist?
+8. Skim `src/engine/cards.js` — the lowest-level module, anchors vocabulary.
+9. Run the test suite to confirm a clean baseline:
+   ```bash
+   node scripts/layout-smoke.js && node scripts/cut-test.js && \
+   node scripts/smoke.js && node scripts/soak.js 3 && node scripts/e2e.js
+   ```
+   If any fail before you've changed code, stop and investigate — the
+   prior session may have left work in-progress.
 
 Only then plan your session. Before acting, state in one sentence what you're
 about to change and why.
@@ -103,8 +114,15 @@ The goal: each session makes the next session start faster and safer.
 - Prefer editing existing files over creating new ones.
 
 ### Before ending
-- Commit with a clear message on branch `claude/mobile-game-development-GifG7`.
-- Push with `git push -u origin <branch>`.
+- Run the full test suite (5 scripts; see Boot Sequence step 9). All five
+  must be green.
+- Commit with a clear message on the feature branch you were assigned by
+  the user (look for "designated branch" in the system prompt).
+- Push the feature branch: `git push -u origin <feature-branch>`.
+- **To ship to production**, merge the feature branch into the watched
+  branch (`claude/mobile-game-development-GifG7`) and push it. Railway
+  auto-deploys on push to that branch. Verify with
+  `curl https://<domain>/version`. Full procedure in `docs/DEPLOYMENT.md`.
 - Update `docs/TASKS.md` and (if applicable) `docs/DECISIONS.md`.
 - Leave `docs/TASKS.md` in a state where "what to do next" is obvious from
   a cold read.
@@ -141,6 +159,14 @@ The last thing you do in a session, always:
   first-class options.** Present 160/170/180/200/210/220/250 as suggested
   chips, allow custom entry for edge cases (see user message on betting
   conventions, 2026-04-16).
+- **Don't change `railway.json#build.builder` away from `"DOCKERFILE"`.**
+  Nixpacks's Node detector caches aggressively and missed redeploys when
+  only `public/` changed. v1 ran into this; v2.0.0 pinned DOCKERFILE
+  specifically to prevent regression. See `docs/DEPLOYMENT.md`.
+- **Don't bump `package.json#version` without also updating
+  `public/index.html` (the build marker AND the `?v=<version>` cache-bust
+  query strings) and `public/client.js` (the `BUILD` constant).** All four
+  must match. `scripts/layout-smoke.js` will fail loudly if they drift.
 
 ## 8. Current Working Agreement (from user messages)
 

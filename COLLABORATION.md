@@ -6,8 +6,32 @@
 ## Repository
 
 - Repo: `rrathip-glitch/304`
-- Active branch: **`claude/fix-layout-cutting-mechanic-kepuN`** (v2.0.0)
+- **Watched branch (auto-deploys to Railway):**
+  `claude/mobile-game-development-GifG7`
+- **Current feature branch (v2.0.0 work):**
+  `claude/fix-layout-cutting-mechanic-kepuN`
 - Clone: `git clone <repo-url> && git checkout claude/fix-layout-cutting-mechanic-kepuN`
+
+## Two-branch model
+
+```
+       claude/fix-layout-cutting-mechanic-kepuN   (feature work — push freely)
+                              │
+                              │  merge --no-edit
+                              ▼
+       claude/mobile-game-development-GifG7       (Railway watches this)
+                              │
+                              │  push
+                              ▼
+                   Railway auto-build (Dockerfile)
+                              │
+                              ▼
+                   curl /version → confirm
+```
+
+Feature work happens on the feature branch. Production deploys happen
+when you merge into the watched branch and push. See
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full procedure.
 
 ## Project in One Paragraph
 

@@ -65,7 +65,23 @@ node scripts/soak.js 5          # 5 matches; token invariant
 node scripts/e2e.js             # boots server, drives socket
 ```
 
-All five passing as of v2.0.0 (commit on `claude/fix-layout-cutting-mechanic-kepuN`).
+All five passing as of v2.0.0. Both `claude/fix-layout-cutting-mechanic-kepuN`
+(work branch) and `claude/mobile-game-development-GifG7` (Railway-watched
+branch) are at the same SHA.
+
+## Release procedure
+
+See `docs/DEPLOYMENT.md` for the canonical steps. Summary:
+
+1. Run all five test scripts on your feature branch — all green.
+2. Bump `package.json#version` if user-visible. Sync to
+   `public/index.html` (build marker + `?v=` queries) and
+   `public/client.js` (`BUILD` constant). `layout-smoke.js` enforces
+   parity.
+3. `git push origin <feature-branch>`.
+4. `git checkout claude/mobile-game-development-GifG7 && git merge
+   <feature-branch> --no-edit && git push`.
+5. `curl https://<domain>/version` → confirm new version live.
 
 ## Backlog (not blocking)
 
