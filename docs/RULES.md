@@ -97,14 +97,20 @@ scoring) uses the internal value unchanged.
   you may not bid <200 on your next turn (you may still pass).
 - **Partner-is-high restriction**: if the current high bidder is your
   partner, you may not bid <200 (you may still pass).
-- **Ask-partner-to-bid**: at your turn, you may ask your partner to bid in
-  your place. This counts as a turn for **both** players. After this,
-  neither of you may bid <200. *(House rule, v2.2.1):* **the asker is
-  further locked out of bidding for the rest of the round** — they
-  delegated the call to their partner and may only pass on subsequent
-  turns. The partner can bid freely (subject to the ≥200 floor). The
-  UI omits bid chips from the asker's action bar; the engine rejects
-  `{type:'bid'}` from them defensively.
+- **Ask-partner-to-bid**: at your turn, you may ask your partner to bid
+  in your place. This counts as a turn for both players. After this,
+  neither of you may bid <200.
+  - *(House rule, v2.2.1)* **The asker is locked out of bidding for
+    the rest of the round** — they've delegated the call.
+  - *(House rule, v2.2.3)* **Asking counts as the asker's pass.** They
+    don't get routed back; rotation skips them for the rest of the
+    round. Mechanically, the engine adds the asker to `passedSeats`
+    at the moment the ask is logged. The UI chip reads
+    "Ask partner (counts as pass)" so the consequence is visible
+    before the tap.
+  - *(House rule, v2.2.3)* **Once per round.** If you've been part of
+    an ask chain (as either asker or asked partner), you cannot ask
+    partner again in the same round.
 - **Redeal demand**: the dealer's right-hand opponent, and *only* they,
   before their first bid/pass, may demand a redeal if their 4 cards total
   < 15 internal points (< 1.5 displayed). Same dealer reshuffles.

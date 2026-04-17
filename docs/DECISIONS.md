@@ -399,5 +399,38 @@ so a regression can't silently ship.
 
 ---
 
+## 2026-04-17 — Ask partner counts as your pass; once per round; no stale bid UI — v2.2.3
+
+**Decisions (three related fixes in one release):**
+
+1. **askPartner adds the asker to `state.passedSeats`.** The asker is
+   never routed back for a second turn. `advanceBid4`'s existing
+   skip-passed-seats loop handles the rest. Supersedes the v2.2.1
+   "asker can still pass" behavior, which was a half-step.
+2. **askPartner is once per round.** `handleBid4` rejects a second
+   askPartner attempt with `'ask-partner already used this round'`.
+   `legalActions(bid4)` omits the chip when `askedPartner[seat]` is
+   true. Blocks ask-back loops.
+3. **Per-seat `pass` / `bid N` labels clear the moment bidding ends.**
+   `bidLabelFor` in `public/client.js` returns empty string outside
+   `bid4` / `bid8` phases, fixing the reported bug where opponent
+   seats still read "pass" and "bid 100" during trick play. The
+   winning bid + bidder remains visible in the top bid-strip.
+
+**Source:** User messages
+- "I should not get the chance to pass after ask partner, it should
+  count as a pass from me"
+- "Also the pass and bid ui should disappear after betting is settled"
+- "See how pass and bid text persists during the trick" (with
+  screenshot showing "pass" under AI 1/AI 2 and "bid 100" under AI 3
+  during play).
+
+**Defensive client-side guard:** `renderActionBar` now also checks
+`v.phase === 'bid4' || v.phase === 'bid8'` before rendering any
+bid/pass/askPartner chip. Redundant with the server filter but
+protects against a stale view-render in the transition window.
+
+---
+
 *Append new entries below this line. Do not modify prior entries — if a
 decision is reversed, add a new entry that references and supersedes it.*

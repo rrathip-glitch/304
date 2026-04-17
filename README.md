@@ -1,6 +1,6 @@
 # 304 — Mobile Multiplayer Card Game
 
-[![version](https://img.shields.io/badge/version-2.2.2-blue.svg)](#release-notes)
+[![version](https://img.shields.io/badge/version-2.2.3-blue.svg)](#release-notes)
 
 A web-based implementation of **304**, a Sri Lankan trick-taking card game.
 Built mobile-first for seamless play between two humans (e.g. you and your
@@ -34,6 +34,21 @@ Any empty seats are filled by the AI.
 Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Release Notes
+
+### v2.2.3 — 2026-04-17
+
+- **Ask partner = your pass.** Calling `askPartner` now counts as the
+  asker's pass for the round — they never get routed back. The chip
+  label now reads "Ask partner (counts as pass)" so the commitment
+  is visible at the button itself.
+- **Ask partner is once per round.** A partner who was asked cannot
+  ask back; the symmetric `askedPartner[]` flag blocks it.
+- **No stale bid UI during play.** The per-seat `pass` / `bid N`
+  labels cleared the moment bidding is settled. The bid-strip at
+  the top carries the winning bid + bidder during play.
+- Defensive client-side guard: `bid` / `pass` / `askPartner` chips
+  are only rendered in bidding phases even if a stale view somehow
+  carried them (belt-and-suspenders for the server-side filter).
 
 ### v2.2.2 — 2026-04-17
 
@@ -121,7 +136,7 @@ git merge <feature-branch> --no-edit
 git push origin claude/mobile-game-development-GifG7
 # wait ~60s, then:
 curl https://<your-app>.up.railway.app/version
-# → {"version":"2.2.2","startedAt":"..."}
+# → {"version":"2.2.3","startedAt":"..."}
 ```
 
 If `version` matches `package.json#version`, you're live. Full procedure,

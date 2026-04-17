@@ -233,12 +233,19 @@ function handleBid4(state, seat, action) {
     const partner = partnerOf(seat);
     if (state.bidTurns[seat] > 0) return fail('askPartner only on your first turn');
     if (!state.seats[partner]) return fail('no partner seated');
+    // v2.2.3: once per round. If you or your partner was already part
+    // of an ask (askedPartner[] is symmetric), you can't ask again.
+    if (state.askedPartner[seat]) return fail('ask-partner already used this round');
     state.bidTurns[seat] += 1;
     state.askedPartner[seat] = true;
     state.askedPartner[partner] = true;
     state.isAsker[seat] = true;  // v2.2.1: asker is locked out of bidding
+    // v2.2.3: askPartner counts as the asker's pass for the round.
+    // They don't get routed back on later rotations — the rest of the
+    // table plays it out without them.
+    if (!state.passedSeats.includes(seat)) state.passedSeats.push(seat);
     state.bids.push({ seat, type: 'askPartner' });
-    log(state, `${state.seats[seat].name} asked partner to bid.`);
+    log(state, `${state.seats[seat].name} asked partner to bid (counts as pass).`);
     state.currentBidder = partner;
     return { ok: true };
   }
@@ -622,7 +629,11 @@ function legalActions(state, seat) {
     const amts = (isHighBidder || isAsker) ? [] : bidAmountsLegal(state, seat);
     if (amts.length) list.push({ type: 'bid', amounts: amts });
     list.push({ type: 'pass' });
-    if (state.bidTurns[seat] === 0 && state.seats[partnerOf(seat)]) {
+    // askPartner is available only once per round (v2.2.3). If you
+    // already asked, or you were already asked by your partner, the
+    // chip is hidden — the symmetric `askedPartner[seat]` flag tracks
+    // both sides of an ask.
+    if (state.bidTurns[seat] === 0 && state.seats[partnerOf(seat)] && !state.askedPartner[seat]) {
       list.push({ type: 'askPartner' });
     }
     if (state.bidTurns[seat] === 0 && seat === next(state.dealer) && cards.handPoints(state.hands[seat]) < 15) {

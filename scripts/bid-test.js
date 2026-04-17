@@ -195,7 +195,7 @@ console.log('\nTest 5: open declaration forces leading the indicator on trick 1'
   assert(s.openIndicatorId === null, 'openIndicatorId cleared after the indicator was led');
 }
 
-console.log('\nTest 6: asker is locked out of bidding after askPartner (v2.2.1)');
+console.log('\nTest 6: askPartner counts as the asker\'s pass (v2.2.3)');
 {
   const s = fixtureSeated();
   game.startHand(s, () => 0.5);
@@ -206,44 +206,36 @@ console.log('\nTest 6: asker is locked out of bidding after askPartner (v2.2.1)'
   assert(r.ok, 'asker calls askPartner');
   assert(s.isAsker[asker] === true, 'isAsker flag set on asker');
   assert(s.isAsker[partner] === false, 'partner is NOT marked as asker');
-  assert(s.currentBidder === partner, 'partner is now the current bidder');
+  assert(s.passedSeats.includes(asker), 'asker is in passedSeats (counts as a pass)');
+  assert(!s.passedSeats.includes(partner), 'partner is NOT in passedSeats yet');
+  assert(s.currentBidder === partner, 'partner is the current bidder');
 
-  // Partner bids. They pass the floor (≥200 because they were asked).
+  // Partner bids 200. High bid = partner.
   r = game.applyAction(s, partner, { type: 'bid', amount: 200 });
   assert(r.ok, 'partner bids 200');
   assert(s.highBid && s.highBid.bidder === partner, 'partner is the high bidder');
 
-  // Rotation continues. Skip to when the asker's turn comes back around.
-  // Walk the rotation to land on asker again.
+  // Now walk the rest of the table. Advance should skip the asker
+  // permanently. If both opponents pass, the partner wins the bid.
   let safety = 0;
-  while (s.currentBidder !== asker && safety < 10) {
+  while (s.phase === game.PHASES.BID4 && safety < 10) {
+    assert(s.currentBidder !== asker, 'asker is never the current bidder again');
     const actor = s.currentBidder;
     const res = game.applyAction(s, actor, { type: 'pass' });
     if (!res.ok) break;
-    if (s.phase !== game.PHASES.BID4) break;
     safety++;
   }
+  assert(s.phase === game.PHASES.TRUMP_PICK1, 'bid resolves to trump pick');
+  assert(s.trumpMaker === partner, 'partner becomes trump maker');
 
-  if (s.phase === game.PHASES.BID4 && s.currentBidder === asker) {
-    // legalActions must NOT include `bid`.
-    const view = game.viewFor(s, asker);
-    const bidEntry = view.legalActions.find((a) => a.type === 'bid');
-    assert(!bidEntry, 'asker sees NO `bid` action in legalActions');
-
-    // Engine rejects a bid even if a client tries to bypass.
-    const r2 = game.applyAction(s, asker, { type: 'bid', amount: 220 });
-    assert(!r2.ok && /asked partner/.test(r2.reason), 'engine rejects asker bid');
-
-    // Pass IS legal.
-    const r3 = game.applyAction(s, asker, { type: 'pass' });
-    assert(r3.ok, 'asker can still pass');
-  } else {
-    // Bid ended before coming back to the asker (e.g., partner + 2 passes
-    // means the partner's 200 stands). That's still a valid outcome;
-    // just note that the engine reached trump_pick1 as expected.
-    assert(s.phase === game.PHASES.TRUMP_PICK1, 'bid resolved (partner wins) when no one raised');
-    assert(s.trumpMaker === partner, 'partner becomes trump maker');
-  }
+  // Double-check: the asker cannot even call askPartner again (once per round).
+  const sCheck = fixtureSeated();
+  game.startHand(sCheck, () => 0.5);
+  const a2 = sCheck.currentBidder;
+  const r1 = game.applyAction(sCheck, a2, { type: 'askPartner' });
+  assert(r1.ok, 'first askPartner accepted');
+  const r2 = game.applyAction(sCheck, (a2 + 2) % 4, { type: 'askPartner' });
+  assert(!r2.ok && /already/.test(r2.reason), 'partner cannot ask back (once per round)');
 }
 
 console.log('\nTest 7: token scale per bid range (household variant)');

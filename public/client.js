@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.2';
+  const BUILD = '2.2.3';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -590,10 +590,22 @@
 
   function bidLabelFor(v, seat) {
     if (!v) return '';
+    // Per-seat "bid N" / "pass" chips are only meaningful WHILE bidding
+    // is in progress. Once the hand transitions to trump pick / play,
+    // the bid-strip at the top of the table carries the winning bid +
+    // bidder — the per-seat labels become clutter and were persisting
+    // "pass" / "bid 100" into the trick view (reported as stale UI).
+    const isBiddingPhase = v.phase === 'bid4' || v.phase === 'bid8';
+    if (!isBiddingPhase) return '';
     if (v.highBid && v.highBid.bidder === seat) {
       return 'bid ' + displayBid(v.highBid.amount);
     }
     if (v.passedSeats && Array.isArray(v.passedSeats) && v.passedSeats.indexOf(seat) !== -1) {
+      // The asker's per-seat label reads "ask" instead of "pass" so
+      // other players can see who made the ask (v2.2.3: askPartner
+      // counts as a pass, but it's useful to distinguish).
+      const bid = v.bids && v.bids.length ? v.bids.find((b) => b.seat === seat && b.type === 'askPartner') : null;
+      if (bid) return 'ask';
       return 'pass';
     }
     return '';
@@ -761,6 +773,12 @@
 
     const actions = v.legalActions || [];
     const yourTurn = v.currentPlayer === state.yourSeat;
+    // Defensive: bid / pass / askPartner chips should only appear while
+    // the round is actually in a bidding phase. The server already
+    // strips them from legalActions in other phases, but this client
+    // guard prevents a stale view-render from showing them after the
+    // bid is settled (the "pass and bid ui should disappear" rule).
+    const isBiddingPhase = v.phase === 'bid4' || v.phase === 'bid8';
 
     if (!actions.length) {
       const hint = document.createElement('div');
@@ -772,9 +790,18 @@
 
     for (const a of actions) {
       switch (a.type) {
-        case 'bid': renderBidAction(a, chipsEl, extrasEl); break;
-        case 'pass': addChip(chipsEl, 'Pass', 'pass', () => emitAction({ type: 'pass' })); break;
-        case 'askPartner': addChip(chipsEl, 'Ask partner', '', () => emitAction({ type: 'askPartner' })); break;
+        case 'bid':
+          if (!isBiddingPhase) break;
+          renderBidAction(a, chipsEl, extrasEl);
+          break;
+        case 'pass':
+          if (!isBiddingPhase) break;
+          addChip(chipsEl, 'Pass', 'pass', () => emitAction({ type: 'pass' }));
+          break;
+        case 'askPartner':
+          if (!isBiddingPhase) break;
+          addChip(chipsEl, 'Ask partner (counts as pass)', '', () => emitAction({ type: 'askPartner' }));
+          break;
         case 'demandRedeal': addChip(chipsEl, 'Demand redeal', 'danger', () => emitAction({ type: 'demandRedeal' })); break;
         case 'declareOpen':
           // The act of declaring open commits the maker to leading the
