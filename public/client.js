@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.18';
+  const BUILD = '2.2.19';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -708,9 +708,8 @@
     const v = state.view;
     if (!v) return;
 
-    // Header
-    $('#table-code').textContent = state.roomId || '';
-    $('#hand-num').textContent = 'Hand ' + (v.handNumber || 1);
+    // Header — v2.2.19: table-code / hand-num elements retired; the
+    // header right cluster now renders the current-bid readout instead.
     renderTokens(v.tokens || [11, 11]);
     renderTrumpStatus(v);
 
@@ -798,34 +797,36 @@
   // `v.indicatorLocation`/`v.indicatorCard` so the hand renderer can
   // decide whether to inject the slot.
 
+  // v2.2.19: renders the top-right bid readout in the header. Replaces
+  // the old .bid-strip below the header AND the prior hand-# / room-code
+  // cluster. Styling follows the header rhythm: a small "BID" eyebrow,
+  // the displayBid value in large gold, and "by <name>" underneath in
+  // muted small caps. Empty (collapsed) when no bid has landed yet.
   function renderBidStrip(v) {
-    const el = $('#bid-strip');
+    const el = document.getElementById('bid-readout');
     if (!el) return;
     el.innerHTML = '';
+    el.classList.remove('active');
     if (!v || !v.highBid) return;
+    el.classList.add('active');
 
     const label = document.createElement('span');
-    label.className = 'bid-strip-label';
+    label.className = 'bid-readout-label';
     label.textContent = (v.phase === 'play' || v.phase === 'inspect' || v.phase === 'hand_end')
-      ? 'Bid this hand'
+      ? 'This hand'
       : 'Current bid';
     el.appendChild(label);
 
     const value = document.createElement('span');
-    value.className = 'bid-strip-value';
+    value.className = 'bid-readout-value';
     value.textContent = displayBid(v.highBid.amount);
     el.appendChild(value);
 
     const bidder = document.createElement('span');
-    bidder.className = 'bid-strip-bidder';
-    const bidderName = nameOfSeat(v.highBid.bidder);
+    bidder.className = 'bid-readout-bidder';
     const youAreBidder = v.highBid.bidder === state.yourSeat;
-    bidder.textContent = 'by ' + (youAreBidder ? 'you' : bidderName);
+    bidder.textContent = 'by ' + (youAreBidder ? 'you' : nameOfSeat(v.highBid.bidder));
     el.appendChild(bidder);
-
-    // v2.2.9: the old "· trump <suit> · open/closed" tail was removed —
-    // that information is carried by the trump-status pill in the header,
-    // and (for the maker) by the labeled indicator card inside their hand.
   }
 
   function nameOfSeat(seat) {

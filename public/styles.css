@@ -484,14 +484,28 @@ button { cursor: pointer; }
   min-width: 0;
   flex-shrink: 1;
 }
-.team { display: flex; align-items: center; gap: 7px; font-size: 13px; white-space: nowrap; }
+/* v2.2.19: each .team is a fixed-width row with three aligned slots:
+ *   [label (44 px)] [num /22] [bar, right-aligned]
+ * The label has a locked width so "11" always starts at the same x
+ * for both teams (previously the wider "THEM" label shoved the "11"
+ * further right). The bar is pushed to the right via margin-left:auto
+ * so its right edge is a consistent anchor across teams. */
+.team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+  width: 158px;
+}
 .team .label {
   color: var(--cream-dim);
   text-transform: uppercase;
   letter-spacing: 1.6px;
   font-size: 11px;
   font-weight: 700;
-  min-width: 32px;
+  width: 44px;
+  flex: none;
 }
 .team-0 .label { color: var(--gold); }
 .team-1 .label { color: #d9b8b8; }
@@ -500,12 +514,19 @@ button { cursor: pointer; }
  * stripe + a soft drop-glow that scales with the fill width. Shows the
  * split at a glance without miscounting digits. */
 .pips {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 4px;
   flex-wrap: nowrap;
-  min-width: 68px;
+  flex: 1;                          /* fill the rest of the .team row */
+  min-width: 0;
 }
+/* v2.2.19: pin the progress bar to the right edge of the .team row so
+ * the "graphic" anchors consistently across both teams regardless of
+ * digit width (e.g., "9" vs "11"). */
+.pips .pips-bar { margin-left: auto; }
+.pips .pips-num { min-width: 22px; text-align: right; }
+.pips .pips-of  { min-width: 20px; }
 .pips .pips-num {
   font-size: 18px;
   font-weight: 800;
@@ -563,36 +584,67 @@ button { cursor: pointer; }
 /* Legacy `.pip` class kept as a no-op for any stale markup (e.g.
  * a pre-v2.2.12 cached client); hidden so the old dots don't leak. */
 .pip { display: none; }
-/* v2.2.17: right cluster text sizes bumped for readability + symmetry
- * with the left token column. Code is the primary (16 px gold bold);
- * hand # is the secondary (11 px muted small caps). */
+/* v2.2.19: right cluster is now a single bid-readout widget. The old
+ * hand # / room code pairing was retired per user request — the hand
+ * number added little in-game value, and the room code is only needed
+ * on the lobby. The current-bid data is now the single source of
+ * truth here, styled to the header's gold-on-dark theme. */
 .head-right {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  align-items: flex-end;
-  font-size: 12px;
-  color: var(--cream-dim);
+  align-items: center;
+  justify-content: flex-end;
   flex-shrink: 0;
   min-width: 0;
   line-height: 1.05;
 }
-.hand-num {
-  text-transform: uppercase;
+.bid-readout {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 4px 10px 4px 12px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.25) 100%);
+  border: 1px solid rgba(230, 200, 106, 0.22);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  min-width: 66px;
+  transition: border-color 240ms ease, box-shadow 240ms ease;
+}
+.bid-readout:empty,
+.bid-readout:not(.active) {
+  visibility: hidden;
+}
+.bid-readout.active {
+  border-color: rgba(230, 200, 106, 0.5);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.35), 0 0 0 1px rgba(230, 200, 106, 0.08);
+}
+.bid-readout .bid-readout-label {
+  font-size: 9px;
   letter-spacing: 1.4px;
-  white-space: nowrap;
-  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1;
+}
+.bid-readout .bid-readout-value {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+.bid-readout .bid-readout-bidder {
+  font-size: 10px;
   color: var(--cream-dim);
   font-weight: 600;
-  order: 2;
-}
-.room-code.small {
-  font-size: 16px;
-  letter-spacing: 2px;
+  line-height: 1;
+  letter-spacing: 0.3px;
+  max-width: 120px;
   white-space: nowrap;
-  order: 1;
-  font-weight: 700;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* v2.2.15: trump dial — a persistent graphical medallion in the center
@@ -837,24 +889,26 @@ button { cursor: pointer; }
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(54px, auto) 1fr minmax(54px, auto);
+  /* v2.2.19: side columns are symmetric 80 px each — column 2 sits at
+   * the true horizontal center of the play-area. Label pills (AI 1,
+   * PASS, BID 100, TRUMP) needed more width than the previous 54 px
+   * minmax; 80 px leaves just enough room for the widest ("BID 100")
+   * and the top 8-card stack still fits the 1fr remainder on a
+   * 375 px (iPhone SE) viewport. */
+  grid-template-columns: 80px 1fr 80px;
   grid-template-rows: minmax(76px, auto) 1fr;
-  /* v2.2.17: larger row gap separates the top seat's back stack from
-   * the top trick card (previously visually kissed). */
   gap: 10px 6px;
   padding: 10px;
   overflow: hidden;
 }
 .seat-slot { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 0; min-height: 0; }
-.seat-top { grid-column: 2; grid-row: 1; justify-self: center; align-self: end; }
-/* v2.2.18: side seats were previously `grid-row: 1 / span 2` which put
- * their topmost back cards at the SAME y-coordinate as the top seat's
- * stack — the three stacks visually kissed at the corners. Now side
- * seats live in row 2 only, so the top seat forms a clear horizontal
- * band above the side stacks. Row 2 has plenty of height (trick center
- * + vertical stack overflow cap) so no visual clipping. */
-.seat-left { grid-column: 1; grid-row: 2; justify-self: start; align-self: stretch; max-height: 100%; justify-content: flex-start; padding-top: 4px; }
-.seat-right { grid-column: 3; grid-row: 2; justify-self: end; align-self: stretch; max-height: 100%; justify-content: flex-start; padding-top: 4px; }
+.seat-top { grid-column: 2; grid-row: 1; justify-self: stretch; align-self: end; }
+/* v2.2.18 / v2.2.19: side seats live in row 2 only (no span), and now
+ * `justify-self: stretch` so the seat-slot fills the 88 px column —
+ * the label pills can spread full width instead of being clipped by
+ * the previous `start` / `end` self-sizing against a narrower cell. */
+.seat-left  { grid-column: 1; grid-row: 2; justify-self: stretch; align-self: stretch; max-height: 100%; justify-content: flex-start; padding-top: 4px; }
+.seat-right { grid-column: 3; grid-row: 2; justify-self: stretch; align-self: stretch; max-height: 100%; justify-content: flex-start; padding-top: 4px; }
 .seat-bottom { flex-shrink: 0; }
 
 /* v2.2.15: player-name and bid labels are decorated pills in the play
@@ -929,16 +983,24 @@ button { cursor: pointer; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-height: 0;
-}
-.seat-bid:empty { display: none; }
-.seat-bid:not(:empty) {
+  /* v2.2.19: reserve the pill's vertical footprint even when empty so
+   * the back-stack above doesn't jump when a seat's bid appears /
+   * disappears. The visual pill is still hidden when there's no text
+   * (transparent background + 0 border). */
+  min-height: 24px;
   display: inline-block;
-  padding: 2px 9px;
-  text-transform: uppercase;
+  padding: 3px 10px;
   border-radius: 999px;
+  background: transparent;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  line-height: 1.2;
+}
+.seat-bid:empty { visibility: hidden; }
+.seat-bid:not(:empty) {
+  text-transform: uppercase;
   background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.2));
-  border: 1px solid rgba(230, 200, 106, 0.25);
+  border-color: rgba(230, 200, 106, 0.25);
   box-shadow: 0 1px 2px rgba(0,0,0,0.35);
 }
 .seat-bid.kind-pass:not(:empty) {
