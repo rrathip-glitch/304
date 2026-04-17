@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.6';
+  const BUILD = '2.2.7';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -476,6 +476,7 @@
     // Bid strip — visible across bidding AND play so the stake is
     // always one glance away.
     renderBidStrip(v);
+    renderIndicatorStrip(v);
 
     // Seats
     renderOpponentSeats(v);
@@ -531,6 +532,60 @@
 
     el.classList.add(isOpen ? 'open' : 'closed');
     if (!suitVisible) el.classList.add('unknown');
+  }
+
+  // Indicator-status strip (v2.2.7). Renders one of:
+  //   • nothing — pre-pick, no indicator yet.
+  //   • card-back + "held face-down by <Maker>" — closed game.
+  //     Only the maker sees the face of the card (in their #your-trump
+  //     row); public viewers see a back.
+  //   • small face-up card + "in <Maker>'s hand (open)" — trump opened
+  //     (by cut-reveal, auto-open, or declared-open) and the maker is
+  //     still holding the card.
+  //   • small face-up card + "played" — the indicator has been played
+  //     (either the maker's own cut or the mandatory open-trick-1 lead).
+  function renderIndicatorStrip(v) {
+    const el = $('#indicator-strip');
+    if (!el) return;
+    el.innerHTML = '';
+    el.classList.remove('closed', 'in-hand', 'played');
+    if (!v || !v.indicatorLocation) return;
+    const makerName = v.trumpMaker != null ? nameOfSeat(v.trumpMaker) : 'maker';
+    const youAreMaker = v.trumpMaker === state.yourSeat;
+    const loc = v.indicatorLocation;
+    el.classList.add(loc === 'closed' ? 'closed' : loc === 'in-maker-hand' ? 'in-hand' : 'played');
+
+    const label = document.createElement('span');
+    label.className = 'is-label';
+    label.textContent = 'Indicator';
+    el.appendChild(label);
+
+    // Card thumb: face-down back while closed; face-up mini-card otherwise.
+    const cardWrap = document.createElement('span');
+    cardWrap.className = 'is-card';
+    if (loc === 'closed') {
+      cardWrap.appendChild(Cards.renderBack({ small: true }));
+    } else if (v.indicatorCard) {
+      const mini = Cards.render(v.indicatorCard, { small: true });
+      if (loc === 'played') mini.classList.add('dimmed');
+      cardWrap.appendChild(mini);
+    }
+    el.appendChild(cardWrap);
+
+    const status = document.createElement('span');
+    status.className = 'is-state';
+    if (loc === 'closed') {
+      status.textContent = youAreMaker
+        ? 'held by you (closed)'
+        : 'held by ' + makerName + ' (closed)';
+    } else if (loc === 'in-maker-hand') {
+      status.textContent = youAreMaker
+        ? 'in your hand (open)'
+        : 'in ' + makerName + "'s hand (open)";
+    } else {
+      status.textContent = 'played';
+    }
+    el.appendChild(status);
   }
 
   function renderBidStrip(v) {

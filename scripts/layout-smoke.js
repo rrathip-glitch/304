@@ -90,14 +90,14 @@ const html = read('public/index.html');
 assert(/id="your-trump"/.test(html), 'index.html has the trump indicator slot');
 assert(/id="your-hand"/.test(html), 'index.html has the player hand slot');
 assert(/id="phase-banner"/.test(html), 'index.html has the phase banner');
-assert(/v=2\.2\.6/.test(html), 'index.html uses semver cache-bust marker (v2.2.6)');
+assert(/v=2\.2\.7/.test(html), 'index.html uses semver cache-bust marker (v2.2.7)');
 assert(/id="bid-strip"/.test(html), 'index.html has the bid-strip element');
 
 // -- Client behavior checks (parse client.js for the expected hooks) -------
 const client = read('public/client.js');
 assert(
-  /BUILD\s*=\s*'2\.2\.6'/.test(client),
-  'client.js declares BUILD = "2.2.6" (semver, not codename)',
+  /BUILD\s*=\s*'2\.2\.7'/.test(client),
+  'client.js declares BUILD = "2.2.7" (semver, not codename)',
 );
 assert(
   /isTappable\s*=\s*legalIds\.has\(v\.trumpIndicator\.id\)/.test(client),
@@ -131,8 +131,8 @@ assert(
   'game.js view filter sends makerPeek to the trump maker',
 );
 assert(
-  /Cut! Trump suit/.test(game),
-  'game.js logs a "Cut!" message when face-down trump is revealed',
+  /Cut!.*face-down was a/.test(game),
+  'game.js logs a "Cut!" message naming the cutter when face-down trump is revealed',
 );
 assert(
   /if \(hasIndicator\) ids\.push\(indicatorId\)/.test(game),
@@ -189,6 +189,26 @@ assert(
 assert(
   /trump maker cannot play a non-indicator trump face-down/.test(game),
   'game.js rejects maker\'s non-indicator trump face-down (v2.2.5)',
+);
+assert(
+  /cannot bid over your partner/.test(game),
+  'game.js rejects partner-overbid in both bid4 and bid8 (v2.2.7)',
+);
+assert(
+  /indicatorLocation/.test(game),
+  'game.js exposes indicatorLocation on the view (v2.2.7)',
+);
+assert(
+  /id="indicator-strip"/.test(html),
+  'index.html has the indicator-strip element (v2.2.7)',
+);
+assert(
+  /renderIndicatorStrip/.test(client),
+  'client.js renders the indicator-status strip (v2.2.7)',
+);
+assert(
+  /\.indicator-strip/.test(css),
+  'styles.css styles the indicator-status strip (v2.2.7)',
 );
 
 // -- AI behavior check ------------------------------------------------------

@@ -326,4 +326,122 @@ console.log('\nTest 8: bid display convention (v2.2.2, UI-only)');
   assert(displayBid(null) === '', 'null → ""');
 }
 
-console.log('\nAll bid + open-choice + asker-lockout + token-scale + display tests passed.');
+console.log('\nTest 9: partner-is-high lockout (v2.2.7)');
+{
+  // New rule: if your partner is the current high bidder, you cannot
+  // bid at all — pass is your only action. Applies to both bid4 and
+  // bid8.
+  const s = fixtureSeated();
+  game.startHand(s, () => 0.5);
+  const firstBidder = s.currentBidder;                 // (dealer + 3) % 4
+  const partner = (firstBidder + 2) % 4;
+
+  // First bidder bids 200. Partner's turn comes next-next.
+  let r = game.applyAction(s, firstBidder, { type: 'bid', amount: 200 });
+  assert(r.ok, 'first bidder bids 200');
+
+  // Walk rotation until it's the partner's turn.
+  while (s.currentBidder !== partner && s.phase === game.PHASES.BID4) {
+    r = game.applyAction(s, s.currentBidder, { type: 'pass' });
+    if (!r.ok) break;
+  }
+  assert(s.phase === game.PHASES.BID4, 'still in bid4');
+  assert(s.currentBidder === partner, 'rotation reached partner seat');
+
+  // Partner's legalActions must NOT include `bid`.
+  const view = game.viewFor(s, partner);
+  const bidEntry = view.legalActions.find((a) => a.type === 'bid');
+  assert(!bidEntry, 'partner sees no `bid` action when their partner is high bidder');
+  const passEntry = view.legalActions.find((a) => a.type === 'pass');
+  assert(passEntry, 'partner still sees `pass`');
+
+  // Defensive: engine rejects the action even if a client tries to bypass.
+  const r2 = game.applyAction(s, partner, { type: 'bid', amount: 210 });
+  assert(!r2.ok && /cannot bid over your partner/.test(r2.reason),
+    'engine rejects bid over partner with explicit reason');
+}
+
+console.log('\nTest 10: partner-is-high lockout in bid8');
+{
+  const s = fixtureSeated();
+  // Reach bid8 with seat 1 (trump maker + high bidder). Seat 3 is their
+  // partner (seats 1+3 = team 1). We want to be at seat 3's turn.
+  s.phase = game.PHASES.BID8;
+  s.dealer = 0;
+  s.trumpMaker = 1;
+  s.trumpSuit = 'S';
+  s.trumpIndicator = { rank: '10', suit: 'S', id: '10S' };
+  s.indicatorCardId = '10S';
+  s.highBid = { amount: 220, bidder: 1 };
+  s.currentBidder = 3;                                  // partner's turn
+  s.bid8Turns = 1;
+  for (let i = 0; i < 4; i++) s.hands[i] = [];
+
+  const view = game.viewFor(s, 3);
+  const bidEntry = view.legalActions.find((a) => a.type === 'bid');
+  assert(!bidEntry, 'bid8: partner sees no bid when their partner is high bidder');
+
+  const r = game.applyAction(s, 3, { type: 'bid', amount: 250 });
+  assert(!r.ok && /cannot bid over your partner/.test(r.reason),
+    'bid8: engine rejects partner-overbid');
+}
+
+console.log('\nTest 11: indicatorLocation tracks through the hand (v2.2.7)');
+{
+  const s = fixtureSeated();
+  game.startHand(s, () => 0.5);
+
+  // Pre-pick: no indicator yet.
+  assert(game.viewFor(s, 0).indicatorLocation === null,
+    'indicatorLocation is null before trump is picked');
+
+  // Fast-forward to trump_pick1 by letting first bidder bid and three pass.
+  const first = s.currentBidder;
+  game.applyAction(s, first, { type: 'bid', amount: 200 });
+  let guard = 0;
+  while (s.phase === game.PHASES.BID4 && guard++ < 10) {
+    game.applyAction(s, s.currentBidder, { type: 'pass' });
+  }
+  assert(s.phase === game.PHASES.TRUMP_PICK1, 'reached trump_pick1');
+
+  // Pick any card as trump.
+  const pickId = s.hands[s.trumpMaker][0].id;
+  game.applyAction(s, s.trumpMaker, { type: 'pickTrump', cardId: pickId });
+
+  // Should be 'closed' to everyone now.
+  const viewMaker = game.viewFor(s, s.trumpMaker);
+  assert(viewMaker.indicatorLocation === 'closed',
+    'indicator is closed after trump_pick1');
+  assert(viewMaker.indicatorCard && viewMaker.indicatorCard.id === pickId,
+    'maker sees the indicator card face-up in view');
+  // Non-makers see it as closed too, but without the card data.
+  const viewOther = game.viewFor(s, (s.trumpMaker + 1) % 4);
+  assert(viewOther.indicatorLocation === 'closed',
+    'non-maker sees indicator as closed');
+  assert(viewOther.indicatorCard === null,
+    'non-maker does NOT see the indicator card data');
+
+  // Simulate the open path: put indicator into maker's hand, clear the
+  // private field (as handleOpenChoice / cut-reveal / auto-open do).
+  s.hands[s.trumpMaker].push(s.trumpIndicator);
+  s.trumpIndicator = null;
+  s.isOpenTrump = true;
+  s.trumpRevealed = true;
+
+  const v2 = game.viewFor(s, (s.trumpMaker + 1) % 4);
+  assert(v2.indicatorLocation === 'in-maker-hand',
+    "indicator location switches to 'in-maker-hand' once open");
+  assert(v2.indicatorCard && v2.indicatorCard.id === pickId,
+    'everyone sees the indicator card face-up once open');
+
+  // Simulate playing the indicator in a trick.
+  const handIdx = s.hands[s.trumpMaker].findIndex((c) => c.id === pickId);
+  const cardPlayed = s.hands[s.trumpMaker].splice(handIdx, 1)[0];
+  s.currentTrick = [{ seat: s.trumpMaker, card: cardPlayed, faceDown: false, isTrumpIndicator: true }];
+
+  const v3 = game.viewFor(s, (s.trumpMaker + 1) % 4);
+  assert(v3.indicatorLocation === 'played',
+    "indicator location becomes 'played' once it's left the maker's hand");
+}
+
+console.log('\nAll bid + open-choice + asker-lockout + token-scale + display + partner-lockout + indicator-location tests passed.');

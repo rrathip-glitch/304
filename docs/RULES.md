@@ -123,8 +123,11 @@ scoring) uses the internal value unchanged.
   no further confirmation needed.
 - **Second-turn <200 restriction**: if you have already bid or passed once,
   you may not bid <200 on your next turn (you may still pass).
-- **Partner-is-high restriction**: if the current high bidder is your
-  partner, you may not bid <200 (you may still pass).
+- **Partner-is-high restriction** *(house rule; tightened in v2.2.7)*:
+  if the current high bidder is your partner, **you may not bid at
+  all** — pass is your only action. The bid chips are hidden; the
+  engine also rejects the action defensively with
+  `"cannot bid over your partner"`.
 - **Ask-partner-to-bid**: at your turn, you may ask your partner to bid
   in your place. This counts as a turn for both players. After this,
   neither of you may bid <200.
@@ -162,11 +165,12 @@ scoring) uses the internal value unchanged.
 - **No bidding over yourself** *(house rule, v2.1.0)*: the trump maker
   enters bid8 as the high bidder by definition; their only option is
   pass. They cannot self-raise their own 4-card bid.
+- **No bidding over your partner** *(house rule, v2.2.7)*: if the
+  current high bidder is your partner, you must pass.
 - **Minimum bid: 250**. Must exceed the 4-card high bid.
 - Household convention: **rarely goes above 260**. The AI should only bid
   higher than 260 with extraordinary hands (6+ top cards).
 - Cannot ask partner to bid in this round.
-- If your partner just bid, you must pass.
 - If all four pass in the 8-card round, the 4-card bid stands.
 - If someone does bid higher:
   - They become the **new trump maker**.

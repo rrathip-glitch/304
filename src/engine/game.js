@@ -53,6 +53,10 @@ function createGame(roomId = '') {
     highBid: null,
     trumpMaker: null,
     trumpIndicator: null,
+    indicatorCardId: null,     // id of the card picked as trump indicator,
+                               // persisted for the whole hand so the UI
+                               // can locate it in closed / in-hand / played
+                               // states (v2.2.7).
     trumpSuit: null,
     isOpenTrump: false,
     trumpRevealed: false,
@@ -96,6 +100,7 @@ function startHand(state, rng = Math.random) {
   state.highBid = null;
   state.trumpMaker = null;
   state.trumpIndicator = null;
+  state.indicatorCardId = null;
   state.trumpSuit = null;
   state.isOpenTrump = false;
   state.trumpRevealed = false;
@@ -138,11 +143,19 @@ function minAllowedBid(state, seat) {
   let floor = 160;
   if (priorTurns >= 1) floor = 200;
   if (askedHere) floor = 200;
-  if (state.highBid && partnerOf(seat) === state.highBid.bidder) floor = 200;
   return floor;
 }
 
+// Partner-is-high lockout (v2.2.7): if your partner is the current high
+// bidder, you cannot bid at all — pass is your only action. This replaces
+// the older "≥200 floor" version of the rule. Applies to both bid4 and
+// bid8. Keeps bid-chip rendering and engine validation in sync.
+function partnerIsHighBidder(state, seat) {
+  return !!(state.highBid && partnerOf(seat) === state.highBid.bidder);
+}
+
 function bidAmountsLegal(state, seat) {
+  if (partnerIsHighBidder(state, seat)) return [];
   const floor = minAllowedBid(state, seat);
   const lower = Math.max(floor, state.highBid ? state.highBid.amount + 10 : 160);
   const upper = 240;
@@ -151,7 +164,8 @@ function bidAmountsLegal(state, seat) {
   return out;
 }
 
-function bid8AmountsLegal(state) {
+function bid8AmountsLegal(state, seat) {
+  if (partnerIsHighBidder(state, seat)) return [];
   const lower = Math.max(250, state.highBid ? state.highBid.amount + 10 : 250);
   const upper = 300;
   const out = [];
@@ -216,6 +230,10 @@ function handleBid4(state, seat, action) {
     // to bid and then outbid the partner's own raise on their next turn,
     // which breaks the "I pass the call" social contract of askPartner.
     if (state.isAsker[seat]) return fail('you asked partner to bid — you can only pass this round');
+    // House rule (v2.2.7): you cannot bid while your partner is the
+    // current high bidder. Pass is your only action. Was previously
+    // a ≥200 floor; the user tightened it to a hard lockout.
+    if (partnerIsHighBidder(state, seat)) return fail('cannot bid over your partner');
     const floor = minAllowedBid(state, seat);
     if (amount < floor) return fail(`your bid floor is ${floor}`);
     if (state.highBid && amount <= state.highBid.amount) return fail('must exceed current high bid');
@@ -290,6 +308,7 @@ function handleTrumpPick(state, seat, action, round) {
   if (idx < 0) return fail('card not in hand');
   const card = hand.splice(idx, 1)[0];
   state.trumpIndicator = card;
+  state.indicatorCardId = card.id;
   state.trumpSuit = card.suit;
   log(state, `${state.seats[seat].name} placed trump indicator face-down.`);
 
@@ -325,9 +344,9 @@ function handleBid8(state, seat, action) {
     // high bidder (typically the trump maker entering the round) has no
     // self-raise path — they can only pass, or wait to be outbid.
     if (state.highBid && state.highBid.bidder === seat) return fail('you are already the high bidder');
+    // House rule (v2.2.7): cannot bid over your partner, full stop.
+    if (partnerIsHighBidder(state, seat)) return fail('cannot bid over your partner');
     if (state.highBid && amount <= state.highBid.amount) return fail('must exceed current high bid');
-    const lastBid = [...state.bids].reverse().find((b) => b.type === 'bid' && b.round === 8);
-    if (lastBid && lastBid.seat === partner) return fail('cannot bid after partner');
 
     const newMaker = seat;
     if (newMaker !== state.trumpMaker) {
@@ -505,8 +524,8 @@ function resolveTrick(state) {
   state.cutResolved = false;
   const inClosed = !state.isOpenTrump && !state.trumpRevealed;
   if (inClosed) {
-    const anyFaceDownTrump = state.currentTrick.some((p) => p.faceDown && p.card.suit === state.trumpSuit);
-    if (anyFaceDownTrump) {
+    const cutterPlay = state.currentTrick.find((p) => p.faceDown && p.card.suit === state.trumpSuit);
+    if (cutterPlay) {
       state.trumpRevealed = true;
       state.isOpenTrump = true;
       state.cutResolved = true;
@@ -526,7 +545,8 @@ function resolveTrick(state) {
         state.hands[state.trumpMaker].push(state.trumpIndicator);
         state.trumpIndicator = null;
       }
-      log(state, `Cut! Trump suit (${state.trumpSuit}) revealed.`);
+      const cutterName = state.seats[cutterPlay.seat]?.name || `Seat ${cutterPlay.seat}`;
+      log(state, `Cut! ${cutterName}'s face-down was a ${state.trumpSuit} (trump) — game is now open.`);
     }
   }
 
@@ -671,14 +691,16 @@ function legalActions(state, seat) {
   }
   if (state.phase === PHASES.BID8 && seat === state.currentBidder) {
     const list = [];
-    // Same no-self-overbid rule applies in the 8-card round. The trump
-    // maker enters bid8 as the high bidder by definition; their only
-    // option is to pass (waiting to see if anyone outbids them).
+    // Three lockouts in bid8:
+    //   1. No self-overbid — high bidder can only pass (v2.1.0).
+    //   2. No bidding over partner — if your partner is the current
+    //      high bidder, you can only pass (v2.2.7, strict lockout
+    //      supersedes the old ≥200 floor AND the "cannot bid after
+    //      partner" check that was previously needed for bid8).
+    //   3. (Implicit) `bid8AmountsLegal` returns [] for both cases.
     const isHighBidder = state.highBid && state.highBid.bidder === seat;
-    const amts = isHighBidder ? [] : bid8AmountsLegal(state);
-    const lastBid = [...state.bids].reverse().find((b) => b.type === 'bid' && b.round === 8);
-    const partnerJustBid = lastBid && lastBid.seat === partnerOf(seat);
-    if (amts.length && !partnerJustBid) list.push({ type: 'bid', amounts: amts });
+    const amts = isHighBidder ? [] : bid8AmountsLegal(state, seat);
+    if (amts.length) list.push({ type: 'bid', amounts: amts });
     list.push({ type: 'pass' });
     return list;
   }
@@ -779,6 +801,38 @@ function legalCardIds(state, seat) {
   return hand.map((c) => c.id);
 }
 
+// Where is the indicator right now, as a publicly-shareable string?
+// Returns null before a trump has been picked.
+function indicatorLocationFor(state) {
+  if (state.trumpMaker == null || !state.indicatorCardId) return null;
+  if (state.trumpIndicator) return 'closed';
+  if (state.hands[state.trumpMaker].some((c) => c.id === state.indicatorCardId)) {
+    return 'in-maker-hand';
+  }
+  return 'played';
+}
+
+// The indicator card for the view — full card when public (open + in-hand
+// or played), the card itself to the maker while closed (they know what
+// they picked), and null to other seats while closed.
+function indicatorCardVisible(state, seat) {
+  if (state.trumpMaker == null || !state.indicatorCardId) return null;
+  if (state.trumpIndicator) {
+    return seat === state.trumpMaker ? state.trumpIndicator : null;
+  }
+  // Indicator is either in maker's hand or already played.
+  const inHand = state.hands[state.trumpMaker].find((c) => c.id === state.indicatorCardId);
+  if (inHand) return inHand;
+  // Played — find it in currentTrick or lastTrick.
+  const inCurrent = state.currentTrick.find((p) => p.card && p.card.id === state.indicatorCardId);
+  if (inCurrent) return inCurrent.card;
+  if (state.lastTrick) {
+    const inLast = state.lastTrick.find((p) => p.card && p.card.id === state.indicatorCardId);
+    if (inLast) return inLast.card;
+  }
+  return null;
+}
+
 function viewFor(state, seat) {
   const view = {
     roomId: state.roomId,
@@ -800,6 +854,15 @@ function viewFor(state, seat) {
     trumpMaker: state.trumpMaker,
     trumpSuit: state.trumpRevealed || state.isOpenTrump ? state.trumpSuit : null,
     trumpIndicator: (seat === state.trumpMaker || state.trumpRevealed) ? state.trumpIndicator : null,
+    // Public location of the indicator card (v2.2.7). Visible to everyone
+    // so the UI can render the indicator-status widget — though `card` is
+    // populated only in the open/revealed states (closed stays a back).
+    //   'closed'        — held face-down by the maker.
+    //   'in-maker-hand' — open; indicator is in maker's hand, not yet played.
+    //   'played'        — open; indicator has been played to a trick.
+    //   null            — no maker picked yet (pre-trump_pick phases).
+    indicatorLocation: indicatorLocationFor(state),
+    indicatorCard: indicatorCardVisible(state, seat),
     isOpenTrump: state.isOpenTrump,
     trumpRevealed: state.trumpRevealed,
     trickLeader: state.trickLeader,

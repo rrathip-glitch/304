@@ -1,6 +1,6 @@
 # 304 — Mobile Multiplayer Card Game
 
-[![version](https://img.shields.io/badge/version-2.2.6-blue.svg)](#release-notes)
+[![version](https://img.shields.io/badge/version-2.2.7-blue.svg)](#release-notes)
 
 A web-based implementation of **304**, a Sri Lankan trick-taking card game.
 Built mobile-first for seamless play between two humans (e.g. you and your
@@ -34,6 +34,23 @@ Any empty seats are filled by the AI.
 Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Release Notes
+
+### v2.2.7 — 2026-04-17
+
+- **Partners cannot bid over each other.** Previously the partner-is-high
+  rule raised the bid floor to 200; now it's a hard lockout — the bid
+  chips disappear and the engine rejects the action with
+  `"cannot bid over your partner"`. Applies to both the 4-card and
+  8-card rounds.
+- **Trump-indicator status widget.** A new row under the bid strip
+  shows the indicator card plus its location: *held (closed)*,
+  *in maker's hand (open)*, or *played*. Closed games show a face-down
+  back with the maker's name; open games show the card face-up; after
+  the indicator has been played it's shown dimmed with a "played"
+  label. Visible to every seat.
+- **Clearer cut log.** When a face-down trump opens the game, the log
+  now names the cutter explicitly:
+  `"Cut! AI 2's face-down was a ♠ (trump) — game is now open."`
 
 ### v2.2.6 — 2026-04-17
 

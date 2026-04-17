@@ -409,6 +409,53 @@ button { cursor: pointer; }
 .bid-strip .bid-strip-bidder { color: var(--cream); }
 .bid-strip .bid-strip-trump { color: var(--cream-dim); font-style: italic; }
 
+/* ============ Indicator-status strip (v2.2.7) ============
+ * Single row showing the trump indicator card + its current location
+ * (closed / in-maker-hand / played). Visible to every seat; the card
+ * face is only populated when the indicator is publicly known. */
+.indicator-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--cream-dim);
+  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
+}
+.indicator-strip:empty { display: none; }
+.indicator-strip .is-label {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.indicator-strip .is-card {
+  display: inline-flex;
+  align-items: center;
+}
+.indicator-strip .is-card .card {
+  /* Even smaller than the `small` variant — this is a status icon, not
+   * a play target. Prevents it from eating vertical room on short screens. */
+  width: clamp(22px, 6vw, 30px);
+  height: clamp(31px, 8.4vw, 42px);
+  min-width: 22px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+.indicator-strip .is-card .card .c-rank { font-size: 9px; letter-spacing: 0; }
+.indicator-strip .is-card .card .c-suit { font-size: 8px; }
+.indicator-strip .is-card .card .card-center { font-size: 14px; }
+.indicator-strip .is-card .card.dimmed {
+  opacity: 0.55;
+  filter: grayscale(0.2);
+}
+.indicator-strip .is-state { color: var(--cream); font-weight: 500; }
+.indicator-strip.closed .is-state { color: var(--cream-dim); }
+.indicator-strip.in-hand .is-state { color: var(--gold); font-weight: 700; }
+.indicator-strip.played .is-state { color: var(--cream-dim); font-style: italic; }
+
 /* ============ Play area (seats + trick) ============
  * Grid layout with content-sized side columns so opponent stacks claim only
  * the room they actually need. The center column expands to fill remaining
