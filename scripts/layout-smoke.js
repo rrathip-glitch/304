@@ -90,14 +90,14 @@ const html = read('public/index.html');
 assert(/id="your-trump"/.test(html), 'index.html has the trump indicator slot');
 assert(/id="your-hand"/.test(html), 'index.html has the player hand slot');
 assert(/id="phase-banner"/.test(html), 'index.html has the phase banner');
-assert(/v=2\.1\.0/.test(html), 'index.html uses semver cache-bust marker (v2.1.0)');
+assert(/v=2\.2\.0/.test(html), 'index.html uses semver cache-bust marker (v2.2.0)');
 assert(/id="bid-strip"/.test(html), 'index.html has the bid-strip element');
 
 // -- Client behavior checks (parse client.js for the expected hooks) -------
 const client = read('public/client.js');
 assert(
-  /BUILD\s*=\s*'2\.1\.0'/.test(client),
-  'client.js declares BUILD = "2.1.0" (semver, not codename)',
+  /BUILD\s*=\s*'2\.2\.0'/.test(client),
+  'client.js declares BUILD = "2.2.0" (semver, not codename)',
 );
 assert(
   /isTappable\s*=\s*legalIds\.has\(v\.trumpIndicator\.id\)/.test(client),
@@ -160,6 +160,35 @@ const ai = read('src/engine/ai.js');
 assert(
   /state\.trumpMaker === \(\(state\.dealer \+ 3\) % 4\)/.test(ai),
   'ai.js gates declareOpen on the same trick-1-leader rule (avoids illegal action)',
+);
+
+// -- Server robustness checks (parse server.js) -----------------------------
+const server = read('server.js');
+assert(
+  /STALL_FALLBACK_MS\s*=\s*25000/.test(server),
+  'server.js has the 25 s stall fallback constant',
+);
+assert(
+  /sweepIdleRooms/.test(server),
+  'server.js has the idle-room GC sweeper',
+);
+assert(
+  /shouldAIDriveSeat/.test(server),
+  'server.js routes humanless actor seats to the AI fallback',
+);
+assert(
+  /sanitizeAction\(rawAction\)/.test(server),
+  'server.js sanitizes incoming action payloads at the boundary',
+);
+assert(
+  /sanitizeName/.test(server),
+  'server.js sanitizes player names',
+);
+
+const sanitize = read('src/util/sanitize.js');
+assert(
+  /ACTION_TYPES/.test(sanitize),
+  'sanitize.js whitelists action types',
 );
 
 // -- Summary ---------------------------------------------------------------

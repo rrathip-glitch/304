@@ -6,6 +6,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const game = require('./src/engine/game');
+const { sanitizeName, sanitizeAction } = require('./src/util/sanitize');
 
 // AI module is optional during scaffolding; fall back to a no-op chooser.
 let ai;
@@ -112,6 +113,24 @@ function firstAISeat(room) {
   return null;
 }
 
+function hasConnectedSocket(room, seat) {
+  return !!room.sockets.get(seat);
+}
+
+// Treat a humanless seat (human-occupied but socket disconnected) as an
+// AI candidate after the stall window, so a closed-tab player doesn't
+// freeze the table for everyone else.
+function shouldAIDriveSeat(room, seat) {
+  if (isSeatAI(room, seat)) return true;
+  // Human seat with no live socket — let the stall fallback handle it.
+  return !hasConnectedSocket(room, seat);
+}
+
+function touchRoom(room) {
+  if (!room) return;
+  room.lastTouched = Date.now();
+}
+
 function scheduleAITurn(room) {
   if (!room || !rooms.has(room.code)) return;
   const state = room.state;
@@ -145,9 +164,16 @@ function scheduleAITurn(room) {
   }
 
   if (actor === null || actor === undefined) return;
-  if (!isSeatAI(room, actor)) return;
+  if (!shouldAIDriveSeat(room, actor)) return;
 
-  const delay = 600 + Math.random() * 600;
+  // Two delay regimes:
+  //  • AI seat → snap thinking time (600–1200 ms) for natural pacing.
+  //  • Human seat with no socket (the "stall fallback") → 25 s grace
+  //    period so a human reconnecting from a network blip doesn't get
+  //    auto-played-over. If they're still gone after 25 s, AI takes the
+  //    turn so the rest of the table isn't stuck.
+  const isStallFallback = !isSeatAI(room, actor);
+  const delay = isStallFallback ? STALL_FALLBACK_MS : 600 + Math.random() * 600;
   const token = {};
   room.aiQueue.push(token);
   setTimeout(() => {
@@ -157,7 +183,9 @@ function scheduleAITurn(room) {
     if (room.state !== state) return;
     const stillActor = whoseTurn(state);
     if (stillActor !== actor) return;
-    if (!isSeatAI(room, actor)) return;
+    // Re-check at fire time: if a human reconnected, abort the
+    // fallback; they get to play their own turn.
+    if (!shouldAIDriveSeat(room, actor)) return;
     const action = ai.chooseAction(state, actor);
     if (action) {
       const res = game.applyAction(state, actor, action);
@@ -175,10 +203,36 @@ function scheduleAITurn(room) {
         }
       }
     }
+    if (isStallFallback) {
+      console.log(`[stall] room=${room.code} seat=${actor} AI auto-played for disconnected human`);
+    }
+    touchRoom(room);
     broadcastViews(room);
     scheduleAITurn(room);
   }, delay);
 }
+
+// Stall-fallback grace window. After this many ms with the actor seat's
+// socket still null, the AI takes the turn on the human's behalf.
+const STALL_FALLBACK_MS = 25000;
+
+// Idle-room GC. A room is dropped if it's been quiet for this long AND
+// no humans are seated (or all humans are disconnected).
+const IDLE_ROOM_TTL_MS = 30 * 60 * 1000;     // 30 min
+const IDLE_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // every 5 min
+
+function sweepIdleRooms() {
+  const now = Date.now();
+  for (const [code, room] of rooms.entries()) {
+    const idleMs = now - (room.lastTouched || 0);
+    if (idleMs < IDLE_ROOM_TTL_MS) continue;
+    const anyConnected = [0, 1, 2, 3].some((s) => hasConnectedSocket(room, s));
+    if (anyConnected) continue;
+    rooms.delete(code);
+    console.log(`[gc] room ${code} dropped after ${Math.round(idleMs / 60000)} min idle`);
+  }
+}
+setInterval(sweepIdleRooms, IDLE_SWEEP_INTERVAL_MS).unref();
 
 function findRoom(roomId) {
   if (!roomId) return null;
@@ -194,14 +248,17 @@ function emitError(socket, reason) {
   socket.emit('actionError', { reason });
 }
 
+// Boundary input hardening (v2.2.0): sanitize* live in src/util/sanitize.js
+// so they can be unit tested without booting Express.
+
 io.on('connection', (socket) => {
   socket.data = socket.data || { roomId: null, seat: null, name: null };
 
   socket.on('createRoom', ({ name } = {}) => {
-    const playerName = (name && String(name).trim()) || 'Player';
+    const playerName = sanitizeName(name);
     const code = newRoomCode();
     const state = game.createGame(code);
-    const room = { code, state, sockets: new Map([[0, null], [1, null], [2, null], [3, null]]), aiQueue: [] };
+    const room = { code, state, sockets: new Map([[0, null], [1, null], [2, null], [3, null]]), aiQueue: [], lastTouched: Date.now() };
     const seatRes = game.seatPlayer(state, { seat: 0, name: playerName, isAI: false });
     if (!seatRes.ok) return emitError(socket, seatRes.reason);
     rooms.set(code, room);
@@ -216,7 +273,7 @@ io.on('connection', (socket) => {
   socket.on('joinRoom', ({ roomId, name } = {}) => {
     const room = findRoom(roomId);
     if (!room) return emitError(socket, 'room not found');
-    const playerName = (name && String(name).trim()) || 'Player';
+    const playerName = sanitizeName(name);
     const order = [2, 1, 3];
     let targetSeat = -1;
     for (const s of order) {
@@ -230,6 +287,7 @@ io.on('connection', (socket) => {
     socket.data.seat = targetSeat;
     socket.data.name = playerName;
     socket.join(room.code);
+    touchRoom(room);
     socket.emit('roomJoined', { seat: targetSeat, view: game.viewFor(room.state, targetSeat) });
     broadcastViews(room);
   });
@@ -237,7 +295,7 @@ io.on('connection', (socket) => {
   socket.on('resume', ({ roomId, name } = {}) => {
     const room = findRoom(roomId);
     if (!room) return emitError(socket, 'room not found');
-    const playerName = (name && String(name).trim()) || '';
+    const playerName = sanitizeName(name);
     // Reclaim the first human seat matching this name, even if a stale
     // socket id is still registered (the old connection may not have fired
     // `disconnect` yet). This is the key to surviving a reconnect.
@@ -257,6 +315,11 @@ io.on('connection', (socket) => {
     socket.data.seat = found;
     socket.data.name = playerName;
     socket.join(room.code);
+    touchRoom(room);
+    // A reconnect can also abort an in-flight stall fallback for THIS
+    // seat: re-running scheduleAITurn will see the seat is now socketed
+    // and skip the AI fire (the existing token-aborted-at-fire-time
+    // check inside the timeout handles the race cleanly).
     socket.emit('roomJoined', { seat: found, view: game.viewFor(room.state, found) });
     broadcastViews(room);
   });
@@ -318,16 +381,23 @@ io.on('connection', (socket) => {
     }
     const res = game.startHand(room.state);
     if (!res.ok) return emitError(socket, res.reason);
+    touchRoom(room);
     broadcastViews(room);
     scheduleAITurn(room);
   });
 
-  socket.on('action', (action = {}) => {
+  socket.on('action', (rawAction = {}) => {
     const room = findRoom(socket.data.roomId);
     if (!room) return emitError(socket, 'no room');
     const seat = seatOfSocket(room, socket.id);
     if (seat < 0) return emitError(socket, 'not seated');
     const state = room.state;
+
+    // Coerce / validate at the boundary. The engine assumes well-formed
+    // shapes; an attacker (or buggy client) could otherwise crash the
+    // server with a non-string cardId.
+    const action = sanitizeAction(rawAction);
+    if (!action) return emitError(socket, 'malformed action');
 
     // Validate it's this seat's turn, based on phase.
     const actor = whoseTurn(state);
@@ -341,6 +411,7 @@ io.on('connection', (socket) => {
 
     const res = game.applyAction(state, seat, action);
     if (!res || !res.ok) return emitError(socket, (res && res.reason) || 'illegal action');
+    touchRoom(room);
     broadcastViews(room);
     scheduleAITurn(room);
   });
@@ -349,7 +420,14 @@ io.on('connection', (socket) => {
     const room = findRoom(socket.data.roomId);
     if (!room) return;
     const seat = seatOfSocket(room, socket.id);
-    if (seat >= 0) room.sockets.set(seat, null);
+    if (seat >= 0) {
+      room.sockets.set(seat, null);
+      // If this seat is the current actor and now has no live socket,
+      // arm the stall fallback so the table doesn't freeze waiting on a
+      // closed tab. scheduleAITurn handles the de-dup if the human
+      // reconnects in time.
+      scheduleAITurn(room);
+    }
   });
 });
 

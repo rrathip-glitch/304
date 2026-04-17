@@ -12,10 +12,11 @@ green/red within seconds.
 | `node scripts/soak.js 5` | Five back-to-back matches. Catches drift + rare deadlocks. | 1–3 s |
 | `node scripts/cut-test.js` | Engine unit tests for the cutting mechanic: maker peek, hidden-from-others, trump-cut wins trick, cutting team leads next, indicator-as-cut. | < 1 s |
 | `node scripts/bid-test.js` | Engine unit tests for v2.1.0 bidding rules: no self-overbid (bid4 + bid8), bid+3-passes auto-resolves, open choice gated on trick-1 leadership, open declaration forces leading the indicator. | < 1 s |
-| `node scripts/layout-smoke.js` | Static analysis of `public/styles.css`, `public/index.html`, `public/client.js`, `src/engine/game.js`, `src/engine/ai.js` to lock in safe-area, clamp() scaling, vertical-stack overflow caps, semver markers, maker-peek wiring, bid-strip presence, open-choice gates. | < 1 s |
+| `node scripts/robust-test.js` | v2.2.0 boundary hardening: `sanitizeAction` rejects malformed payloads; `sanitizeName` trims/caps; live-server boot test confirms `/version` and `/health` respond. | 1–2 s |
+| `node scripts/layout-smoke.js` | Static analysis of `public/styles.css`, `public/index.html`, `public/client.js`, `src/engine/game.js`, `src/engine/ai.js`, `server.js`, `src/util/sanitize.js` to lock in safe-area, clamp() scaling, vertical-stack overflow caps, semver markers, maker-peek wiring, bid-strip presence, open-choice gates, stall fallback constants. | < 1 s |
 | `node scripts/e2e.js` | Boots `server.js`, opens a Socket.IO client, drives a real handshake. Verifies room create + join + start emits the expected views. | 2–4 s |
 
-All six are green as of the v2.1.0 commit.
+All seven are green as of the v2.2.0 commit.
 
 ## CI sequence
 
@@ -24,6 +25,7 @@ npm install
 node scripts/layout-smoke.js   # cheapest; fails fast on style/structure regressions
 node scripts/cut-test.js
 node scripts/bid-test.js
+node scripts/robust-test.js
 node scripts/smoke.js
 node scripts/soak.js 5
 node scripts/e2e.js

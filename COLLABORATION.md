@@ -113,6 +113,46 @@ Scopes: `docs`, `engine`, `ai`, `server`, `client`, `deploy`, `fix`, `style`.
 
 ## Current Status
 
+**v2.2.0 — Session 2026-04-17, Claude Opus 4.7 (ship-ready)**
+
+Shipped:
+- **Stall fallback** (`STALL_FALLBACK_MS = 25 s`). A closed-tab actor
+  seat auto-plays via the AI after 25 s; reconnect cancels it.
+- **Idle room GC** (`IDLE_ROOM_TTL_MS = 30 min`, sweep every 5 min).
+- **Boundary input hardening** in `src/util/sanitize.js`. All
+  client → server payloads are sanitized at the edge.
+- **Documentation refresh.** SOUL.md boot sequence updated; the doc
+  index now reads as a 1→10 cold-start path. ARCHITECTURE.md adds a
+  Robustness Invariants table mapping each guarantee to its test.
+- **Test suite at 7 scripts** (115+ assertions total). `robust-test.js`
+  is new this release.
+
+Verification (all green):
+- `node scripts/layout-smoke.js` → 36 checks.
+- `node scripts/cut-test.js` → 24 assertions.
+- `node scripts/bid-test.js` → 31 assertions.
+- `node scripts/robust-test.js` → 24 assertions, includes live boot.
+- `node scripts/smoke.js`, `node scripts/soak.js 5`, `node scripts/e2e.js`.
+
+Next-up priority:
+- Visual snapshot harness (Playwright) at the 5 reference viewports.
+- Invite-link flow for 2nd human (`?room=ABCDEF&name=Dad`).
+- Polish: animations, sound effects.
+- PCC 3-player mechanics.
+
+---
+
+**v2.1.0 — Session 2026-04-17, Claude Opus 4.7**
+
+- No bidding over yourself (bid4 + bid8); legalActions hides the chips.
+- Open declaration is committal: only offered to the trick-1 leader,
+  forces leading the (former) indicator card on trick 1.
+- Bid+3-passes auto-resolves to trump pick (already engine behavior;
+  now explicit in tests + docs).
+- Current-bid strip in the table UI, visible across bidding + play.
+
+---
+
 **v2.0.0 — Session 2026-04-17, Claude Opus 4.7**
 
 Shipped:

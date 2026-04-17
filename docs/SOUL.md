@@ -32,10 +32,15 @@ Run these in order. Don't skip.
    where did the last session end and which branch are you on?
 7. `ls src/` and `ls public/` — what modules exist?
 8. Skim `src/engine/cards.js` — the lowest-level module, anchors vocabulary.
-9. Run the test suite to confirm a clean baseline:
+9. Run the test suite to confirm a clean baseline (all seven scripts):
    ```bash
-   node scripts/layout-smoke.js && node scripts/cut-test.js && \
-   node scripts/smoke.js && node scripts/soak.js 3 && node scripts/e2e.js
+   node scripts/layout-smoke.js && \
+   node scripts/cut-test.js && \
+   node scripts/bid-test.js && \
+   node scripts/robust-test.js && \
+   node scripts/smoke.js && \
+   node scripts/soak.js 3 && \
+   node scripts/e2e.js
    ```
    If any fail before you've changed code, stop and investigate — the
    prior session may have left work in-progress.
@@ -167,6 +172,15 @@ The last thing you do in a session, always:
   `public/index.html` (the build marker AND the `?v=<version>` cache-bust
   query strings) and `public/client.js` (the `BUILD` constant).** All four
   must match. `scripts/layout-smoke.js` will fail loudly if they drift.
+- **Don't put new server input handling without going through
+  `src/util/sanitize.js`.** Every payload from the network must be
+  validated/coerced at the boundary — the engine assumes well-formed
+  shapes and will crash if a client sends a non-string `cardId`. Add new
+  fields to `sanitizeAction` whenever the protocol grows.
+- **Don't disable the stall fallback or idle GC** in `server.js` without
+  a replacement. They exist because a closed-tab human can otherwise
+  freeze the table for everyone, and abandoned rooms can otherwise
+  accumulate in memory until the dyno restarts.
 
 ## 8. Current Working Agreement (from user messages)
 
@@ -180,17 +194,23 @@ The last thing you do in a session, always:
 
 ## 9. Documentation Index
 
-| File | Purpose |
-|------|---------|
-| `docs/SOUL.md` | (this file) agent orientation, principles, self-improvement |
-| `docs/RULES.md` | canonical 304 rules as implemented, with user variants |
-| `docs/ARCHITECTURE.md` | file map, module boundaries, data flow |
-| `docs/API.md` | Socket.IO event protocol |
-| `docs/TASKS.md` | what's done, what's next, priorities |
-| `docs/DECISIONS.md` | append-only decision log |
-| `docs/TESTING.md` | test scenarios, how to verify a change |
-| `docs/DEPLOYMENT.md` | Railway deployment specifics |
-| `README.md` | user-facing quick start |
+Read in this order on a cold start:
+
+1. `docs/SOUL.md` (this file) — orientation, principles, anti-patterns.
+2. `COLLABORATION.md` — branch model, current status, handoff notes.
+3. `docs/TASKS.md` — what's done, what's next.
+4. `docs/RULES.md` — canonical 304 rules as implemented, with user variants.
+5. `docs/ARCHITECTURE.md` — file map, module boundaries, data flow.
+6. `docs/API.md` — Socket.IO protocol + view filter spec.
+7. `docs/TESTING.md` — test inventory + manual scenarios.
+8. `docs/DEPLOYMENT.md` — Railway pipeline + release procedure.
+9. `docs/DECISIONS.md` — append-only ADR log (read newest entries to
+   understand the most recent rule and architecture changes).
+10. `README.md` — user-facing quick start + release notes.
+
+Each file is self-contained and cross-links to the others by relative
+path. If you update one, scan the others for stale references — broken
+cross-links are a smell that the docs have drifted from reality.
 
 ## 10. Closing Reminder
 

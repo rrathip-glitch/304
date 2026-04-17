@@ -268,5 +268,39 @@ when bidding hasn't started.
 
 ---
 
+## 2026-04-17 — Robustness pass: stall fallback, idle GC, input hardening — v2.2.0
+
+**Decision:** Three runtime guarantees, each implemented as a small,
+test-covered piece of `server.js`:
+
+1. **Stall fallback (25 s).** When the actor seat has a `null` socket
+   for `STALL_FALLBACK_MS`, the AI auto-plays that seat. De-duped via
+   the same `aiQueue` token mechanism used for normal AI pacing — a
+   reconnect within the window aborts the fire.
+2. **Idle room GC (30 min TTL, 5 min sweep).** A `setInterval` sweeps
+   `rooms` and drops any whose `lastTouched` is older than
+   `IDLE_ROOM_TTL_MS` AND whose four socket slots are all `null`.
+   `lastTouched` is bumped on every state-changing or activity event
+   (createRoom, joinRoom, resume, startGame, action, AI fire,
+   disconnect schedule).
+3. **Boundary input hardening.** Extracted `sanitizeName` and
+   `sanitizeAction` into `src/util/sanitize.js`. The server applies
+   them on every client → server payload that becomes part of state
+   or routing. The engine assumes well-formed shapes; without this,
+   a non-string `cardId` would throw inside `findIndex`.
+
+**Alternatives considered:**
+- Move state to Redis so a server restart doesn't lose rooms (rejected:
+  out of scope for a casual game; adds an external dependency).
+- Use socket.io's built-in rooms timeout (rejected: less precise; we
+  want to keep rooms alive while AIs are playing even if humans drop).
+- Validate via a JSON schema library (rejected: extra dep, the action
+  surface is small enough to whitelist by hand).
+
+**Source:** Pre-ship robustness pass requested by the user
+("ensure stability of multiplayer and the overall gameplay").
+
+---
+
 *Append new entries below this line. Do not modify prior entries — if a
 decision is reversed, add a new entry that references and supersedes it.*

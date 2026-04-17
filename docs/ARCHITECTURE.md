@@ -43,15 +43,27 @@ Browser (phone)                            Railway (Node)
 │   ├── TESTING.md            # Manual test scenarios
 │   └── DEPLOYMENT.md         # Railway specifics
 ├── src/
-│   └── engine/
-│       ├── cards.js          # Deck, ranks, compare, winning index
-│       ├── game.js           # State machine, actions, transitions
-│       └── ai.js             # AI bid & play strategy
-└── public/
-    ├── index.html            # Single-page app shell
-    ├── styles.css            # Mobile-first styles
-    ├── client.js             # Socket.IO client, UI state, renderers
-    └── cards.js              # Card SVG/DOM rendering helpers
+│   ├── engine/
+│   │   ├── cards.js          # Deck, ranks, compare, winning index
+│   │   ├── game.js           # State machine, actions, transitions
+│   │   └── ai.js             # AI bid & play strategy
+│   └── util/
+│       └── sanitize.js       # Boundary input hardening (sanitizeName,
+│                             #   sanitizeAction). All client → server
+│                             #   payloads MUST pass through these.
+├── public/
+│   ├── index.html            # Single-page app shell
+│   ├── styles.css            # Mobile-first styles
+│   ├── client.js             # Socket.IO client, UI state, renderers
+│   └── cards.js              # Card SVG/DOM rendering helpers
+└── scripts/
+    ├── smoke.js              # 1-AI-match end-to-end
+    ├── soak.js               # N-match marathon; token invariant
+    ├── e2e.js                # Boots server + drives a real socket
+    ├── cut-test.js           # Cutting mechanic (24 assertions)
+    ├── bid-test.js           # Bid + open rules (31 assertions)
+    ├── robust-test.js        # Sanitize + live /version /health
+    └── layout-smoke.js       # Static analysis of CSS/HTML/JS rules
 ```
 
 ## Data Flow (typical turn)
@@ -167,11 +179,31 @@ First leader: `nextPlayer(dealer)`.
    - `joinRoom(code)` → server places player in first empty seat (typically 2,
      so they're partnered with creator). Supports manual seat pick later.
    - `startGame` → host initiates; empty seats become AI.
-2. Mid-game disconnect: seat remains; if the player reconnects with the
-   same room code + name, they resume. Otherwise AI takes over temporarily.
-3. Room is destroyed when:
-   - All humans have disconnected for > 10 minutes, or
-   - Host ends the game.
+2. Mid-game disconnect: the seat stays bound to the player's name; the
+   socket slot is set to `null`. The client's `sessionStorage`-backed
+   `resume` handshake re-binds the new socket on reconnect.
+3. **Stall fallback (v2.2.0):** if the seat that's currently the actor
+   has no live socket, the AI takes that seat's turn after
+   `STALL_FALLBACK_MS` (25 s). De-duped by token: if the human
+   reconnects before the timer fires, the fallback is skipped.
+4. **Idle room GC (v2.2.0):** every 5 min a sweeper drops any room
+   whose `lastTouched` is older than `IDLE_ROOM_TTL_MS` (30 min) AND
+   has no live sockets. This keeps memory bounded across long uptimes.
+
+## Robustness Invariants
+
+These are the hard guarantees the live server provides. Each has a
+test in `scripts/`:
+
+| Guarantee | Where | Test |
+|---|---|---|
+| Malformed action payloads can't crash the server | `src/util/sanitize.js#sanitizeAction` | `scripts/robust-test.js` |
+| Player names are bounded (24 chars, no control chars) | `src/util/sanitize.js#sanitizeName` | `scripts/robust-test.js` |
+| Closed-tab seat doesn't freeze the table | `server.js#scheduleAITurn` (stall fallback) | `scripts/robust-test.js` (live boot) |
+| Abandoned rooms are reclaimed | `server.js#sweepIdleRooms` | covered by manual review |
+| `/health` is in-process, not cached | `server.js` | `scripts/robust-test.js` |
+| Token total = 22 across any number of hands | `src/engine/game.js#finalizeHand` | `scripts/soak.js` |
+| Hidden state never leaks (face-down cards) | `src/engine/game.js#viewFor` | `scripts/cut-test.js` |
 
 ## Mobile UI Layout (responsive, ~320–1024 wide)
 
