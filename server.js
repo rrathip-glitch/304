@@ -418,6 +418,35 @@ io.on('connection', (socket) => {
     scheduleAITurn(room);
   });
 
+  socket.on('leaveRoom', () => {
+    // v2.2.23: explicit user-initiated exit (in-game menu). Vacate
+    // the seat, clear our session binding, notify the rest of the
+    // table, and drop the socket from the room channel. The room
+    // itself stays open — other humans + the stall-fallback AI can
+    // continue if they choose. If no humans remain, the idle-GC
+    // sweep will reap the room after IDLE_ROOM_TTL_MS.
+    const room = findRoom(socket.data.roomId);
+    if (!room) return;
+    const seat = seatOfSocket(room, socket.id);
+    if (seat < 0) return;
+    const name = (room.state.seats[seat] && room.state.seats[seat].name) || `Seat ${seat}`;
+    room.sockets.set(seat, null);
+    // Leave their seat empty if the game hasn't started; otherwise
+    // keep the seat info so AI stall-fallback can take over mid-hand
+    // (same path as a disconnect).
+    if (room.state.phase === PHASES.WAITING) {
+      game.removeSeat(room.state, seat);
+    }
+    socket.data.roomId = null;
+    socket.data.seat = null;
+    socket.data.name = null;
+    try { socket.leave(room.code); } catch (_) {}
+    console.log(`[leave] room=${room.code} seat=${seat} (${name})`);
+    touchRoom(room);
+    broadcastViews(room);
+    scheduleAITurn(room);
+  });
+
   socket.on('disconnect', () => {
     const room = findRoom(socket.data.roomId);
     if (!room) return;
