@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.10';
+  const BUILD = '2.2.11';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -251,12 +251,14 @@
     // actually animates instead of being collapsed by the browser.
     requestAnimationFrame(() => el.classList.add('visible'));
 
+    // v2.2.11: flashes linger longer so table talk catches up with the UI.
+    // Roughly 1.6–1.8× the prior durations across the board.
     const duration =
-      opts.kind === 'match' ? 4500 :
-      opts.kind === 'hand'  ? 4000 :
-      opts.kind === 'bid'   ? 2400 :
-      opts.kind === 'trump' ? 2000 :
-                              1300;
+      opts.kind === 'match' ? 7500 :
+      opts.kind === 'hand'  ? 6500 :
+      opts.kind === 'bid'   ? 4000 :
+      opts.kind === 'trump' ? 3500 :
+                              2400;
     flashTimer = setTimeout(() => {
       el.classList.remove('visible');
       setTimeout(() => {
@@ -836,6 +838,12 @@
   }
 
   // Opponents (top/left/right): face-down backs for each card in hand.
+  // v2.2.11: if an opponent IS the trump maker, we also render a
+  // separated, labeled "indicator" slot in their stack. The slot starts
+  // face-down while the game is closed, flips face-up when trump is
+  // revealed (open declare, cut, or auto-open), and is removed from view
+  // once the indicator has been played to a trick. This gives non-makers
+  // the same visual anchor on the picked card that the maker has.
   function renderOpponentSeats(v) {
     const handCounts = v.handCounts || [0, 0, 0, 0];
     for (let seat = 0; seat < 4; seat++) {
@@ -851,7 +859,43 @@
       const cardsEl = el.querySelector('.seat-cards');
       cardsEl.innerHTML = '';
       const count = handCounts[seat] || 0;
-      const toDraw = Math.min(count, 8);
+
+      // Is this opponent the trump maker, and does their indicator need
+      // its own slot right now? Hidden once indicator is 'played'.
+      const isMakerSeat = v.trumpMaker === seat;
+      const loc = v.indicatorLocation;
+      const showIndicator = isMakerSeat && (loc === 'closed' || loc === 'in-maker-hand');
+      // When the indicator is back inside hands[maker] (open phase),
+      // handCounts already counts it — subtract 1 from the back stack
+      // so we don't double-render it.
+      const indicatorInHandCount = loc === 'in-maker-hand' ? 1 : 0;
+      const backCount = Math.max(0, count - indicatorInHandCount);
+
+      if (showIndicator) {
+        const isOpen = loc === 'in-maker-hand';
+        const wrap = document.createElement('div');
+        wrap.className = 'indicator-slot opp ' + (isOpen ? 'open' : 'closed');
+
+        const badge = document.createElement('span');
+        badge.className = 'indicator-badge';
+        badge.textContent = isOpen ? 'Trump · open' : 'Trump';
+        wrap.appendChild(badge);
+
+        // Closed: face-down back (suit hidden). Open: face-up with the
+        // card data the server now streams to all seats.
+        let cardEl;
+        if (isOpen && v.indicatorCard) {
+          cardEl = Cards.render(v.indicatorCard, { small: true });
+        } else {
+          cardEl = Cards.renderBack();
+          cardEl.classList.add('small');
+        }
+        cardEl.classList.add('indicator-card');
+        wrap.appendChild(cardEl);
+        cardsEl.appendChild(wrap);
+      }
+
+      const toDraw = Math.min(backCount, 8);
       for (let i = 0; i < toDraw; i++) {
         cardsEl.appendChild(Cards.renderBack());
       }
@@ -942,7 +986,12 @@
     // in the row; visually separated via CSS margin + label).
     if (indicatorCard) {
       const wrap = document.createElement('div');
-      wrap.className = 'indicator-slot ' + indicatorPhase;
+      // v2.2.11: for the caller, the indicator always renders FACE-UP
+      // in its separated slot — they picked the card, they always see
+      // it, and (critically) it remains tappable / playable whenever
+      // the engine says it's legal (cut, trick 8, open-lead). The
+      // `.open` class drives the same gold ring + flip CSS as before.
+      wrap.className = 'indicator-slot open';
 
       const badge = document.createElement('span');
       badge.className = 'indicator-badge';
@@ -950,11 +999,8 @@
       wrap.appendChild(badge);
 
       const isTappable = legalIds.has(indicatorCard.id);
-      // Closed indicator renders face-DOWN (matches the "placed face-down
-      // on the table" reality). On open it's face-up — the CSS `.open`
-      // class drives the flip animation.
       const cardEl = Cards.render(indicatorCard, {
-        faceDown: indicatorPhase === 'closed',
+        faceDown: false,
         legal: isTappable,
         onClick: isTappable ? (card) => onCardTap(card, true) : null,
       });
