@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.17';
+  const BUILD = '2.2.18';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {

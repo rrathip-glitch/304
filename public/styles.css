@@ -845,10 +845,16 @@ button { cursor: pointer; }
   padding: 10px;
   overflow: hidden;
 }
-.seat-slot { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; min-height: 0; }
-.seat-top { grid-column: 2; grid-row: 1; }
-.seat-left { grid-column: 1; grid-row: 1 / span 2; justify-self: start; align-self: stretch; max-height: 100%; }
-.seat-right { grid-column: 3; grid-row: 1 / span 2; justify-self: end; align-self: stretch; max-height: 100%; }
+.seat-slot { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 0; min-height: 0; }
+.seat-top { grid-column: 2; grid-row: 1; justify-self: center; align-self: end; }
+/* v2.2.18: side seats were previously `grid-row: 1 / span 2` which put
+ * their topmost back cards at the SAME y-coordinate as the top seat's
+ * stack — the three stacks visually kissed at the corners. Now side
+ * seats live in row 2 only, so the top seat forms a clear horizontal
+ * band above the side stacks. Row 2 has plenty of height (trick center
+ * + vertical stack overflow cap) so no visual clipping. */
+.seat-left { grid-column: 1; grid-row: 2; justify-self: start; align-self: stretch; max-height: 100%; justify-content: flex-start; padding-top: 4px; }
+.seat-right { grid-column: 3; grid-row: 2; justify-self: end; align-self: stretch; max-height: 100%; justify-content: flex-start; padding-top: 4px; }
 .seat-bottom { flex-shrink: 0; }
 
 /* v2.2.15: player-name and bid labels are decorated pills in the play
