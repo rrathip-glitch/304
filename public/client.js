@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.26';
+  const BUILD = '2.2.27';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -727,6 +727,40 @@
   }
 
   // ---- Table rendering ------------------------------------------------------
+  //
+  // POSITION INVARIANTS (v2.2.27+)
+  // ==============================
+  // The table is laid out with STATIC dimensions for every element that
+  // could otherwise shift from trick to trick. Re-renders only swap
+  // DOM content inside these static frames — layout never reflows.
+  //
+  //   header          ──────────  54 px fixed-min
+  //   phase-banner    ──────────  30 px fixed-min
+  //   play-area       ──────────  flex: 1
+  //     row 1 (top)   ──────────  144 px fixed  ← AI 2 slot
+  //     row 2 (rest)  ──────────  1fr remainder
+  //       col 1 (80)  ──────────  AI 1 slot
+  //       col 2 (1fr) ──────────  .trick (3 × card-h-trick)
+  //         slot-top    partner's played card
+  //         slot-left   left-opp's played card
+  //         slot-right  right-opp's played card
+  //         slot-bottom YOUR played card
+  //       col 3 (80)  ──────────  AI 3 slot
+  //   seat-bottom     ──────────  seat-name + your-hand
+  //     your-hand     ──────────  card-h + 46 px fixed height
+  //                              (reserves room for indicator badge
+  //                               even when you're not trump maker)
+  //   action-bar      ──────────  min 60 px
+  //   log-wrap        ──────────  collapsed details
+  //   menu-btn        ──────────  position: fixed bottom-right
+  //
+  // The back-stacks (.seat-top .seat-cards @ 222 × card-h-sm and
+  // .seat-cards.vertical @ flex 1 1 0, max-height 252 px) stay
+  // centered inside their seat-slots so the overall geometry never
+  // changes even as cards are played. Side-seat verticals can SHRINK
+  // (clipping bottom cards via overflow:hidden) if the row-2 cell
+  // is short, which keeps the BID pill inside row 2 and off the
+  // hand area below.
 
   // Visual slot mapping: your seat → 'bottom'. next(p)=(p+3)%4 (counter-clockwise).
   // So if yourSeat=s, then:
