@@ -1086,20 +1086,34 @@ button { cursor: pointer; }
 .trick {
   grid-column: 2; grid-row: 2;
   position: relative;
-  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  grid-template-rows: 1fr 1fr 1fr;
-  /* v2.2.17: small inner gap so the top/bottom trick cards breathe away
-   * from adjacent labels + stacks. */
+  /* v2.2.27: rows are explicit card heights (not 1fr) so every trick
+   * card lands at the same y regardless of play-area height or trick
+   * count — full position stability for the four played cards. */
+  grid-template-rows:
+    minmax(var(--card-h-trick), auto)
+    minmax(var(--card-h-trick), auto)
+    minmax(var(--card-h-trick), auto);
   gap: 6px;
   align-items: center;
   justify-items: center;
   padding: 4px 0;
+  min-height: calc(var(--card-h-trick) * 3 + 20px);
 }
-/* v2.2.26: every trick-card cell is a fixed, will-change'd frame so
- * the grid never reflows when cards appear / disappear. The card
- * inside the cell animates via transform only; no layout thrash. */
+/* v2.2.27: trick-card cells are STABLE FRAMES — fixed grid-cell via
+ * 1fr × 1fr tracks, but the card INSIDE uses max-height: 100% so it
+ * shrinks to the cell on narrow screens. v2.2.26 set explicit fixed
+ * width/height on `.trick-card` itself, which caused the bottom
+ * card to overflow the sub-cell and read as "cut off". Now:
+ *   • .trick-card = the fixed SLOT frame (1fr × 1fr, flex-centre)
+ *   • .trick-card .card = the painted card, max 100% of the slot
+ * Slot positions (tracker, for reference):
+ *   slot-top    → (col 2, row 1)  partner's card
+ *   slot-left   → (col 1, row 2)  left-opp's card
+ *   slot-right  → (col 3, row 2)  right-opp's card
+ *   slot-bottom → (col 2, row 3)  YOUR card
+ * These never change round-to-round or trick-to-trick. */
 .trick-card {
   display: flex;
   align-items: center;
@@ -1107,11 +1121,10 @@ button { cursor: pointer; }
   position: relative;
   transition: transform 300ms ease, opacity 200ms ease;
   min-height: 0;
-  max-height: 100%;
-  width: var(--card-w-trick);
-  height: var(--card-h-trick);
+  min-width: 0;
+  width: 100%;
+  height: 100%;
   overflow: visible;
-  will-change: contents;
 }
 .trick-card.slot-top    { grid-column: 2; grid-row: 1; }
 .trick-card.slot-right  { grid-column: 3; grid-row: 2; }
@@ -1183,16 +1196,21 @@ button { cursor: pointer; }
   display: flex;
   flex-direction: row;
   align-self: stretch;
-  /* v2.2.22: user asked for the remaining cards to be centered in
-   * the frame. `safe center` re-centres on card count (so the row
-   * drifts a bit as cards are played) but keeps the hand visually
-   * balanced — matches the natural card-game feel. */
+  /* v2.2.22: user asked for remaining cards to be centered in the
+   * frame. `safe center` re-centres on card count but keeps the
+   * hand visually balanced — matches the natural card-game feel. */
   justify-content: safe center;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 18px 8px 6px;
   gap: 0;
-  min-height: calc(var(--card-h) + 28px);
+  /* v2.2.27: height is RESERVED for the taller indicator layout
+   * (card-h + badge 16 + top padding 18 + bottom padding 6 + small
+   * buffer) so the hand row's vertical footprint never changes when
+   * the indicator slot appears / disappears — critical for stable
+   * trick-bottom card positioning. */
+  height: calc(var(--card-h) + 46px);
+  min-height: calc(var(--card-h) + 46px);
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
