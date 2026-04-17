@@ -454,11 +454,19 @@ function handlePlay(state, seat, action) {
       return fail('must follow suit');
     }
     if (!following && !state.isOpenTrump) {
+      // House rule (v2.2.5): the trump maker's face-down play in a
+      // closed game is either a DISPOSAL (a non-trump card thrown
+      // away) or a CUT using the indicator itself. A non-indicator
+      // trump can never be played face-down by the maker — if they
+      // want to play a hand-trump, the game has to be open first.
+      // This keeps cuts predictable: whenever the maker cuts, the
+      // card flipped face-up is necessarily the preselected indicator.
+      if (state.trumpMaker === seat && !isIndicator && card.suit === state.trumpSuit) {
+        return fail('trump maker cannot play a non-indicator trump face-down — use the indicator to cut, or play a non-trump as a disposal');
+      }
       if (!isIndicator) {
-        const nonIndicatorExists = hand.some((c, i) => i !== idx && !(state.trumpMaker === seat && state.trumpIndicator && c.id === state.trumpIndicator.id));
-        if (!action.faceDown && nonIndicatorExists) {
-          action.faceDown = true;
-        }
+        // Anyone can't-follow-suit in a closed game must play face-down.
+        if (!action.faceDown) action.faceDown = true;
       }
     }
   }
@@ -736,14 +744,27 @@ function legalCardIds(state, seat) {
   if (following) {
     return hand.filter((c) => c.suit === leadSuit && c.id !== indicatorId).map((c) => c.id);
   }
-  // Can't follow suit. Any non-indicator hand card is legal (face-down cut
-  // in closed games is enforced inside handlePlay). The trump maker may also
-  // play the indicator face-down to cut — include it explicitly here so the
-  // client can render it as a tappable, legal card (this fixes the stuck UI
-  // where the maker held only the indicator and had no tap target).
-  const ids = hand.filter((c) => c.id !== indicatorId).map((c) => c.id);
+  // Can't follow suit. Any non-indicator hand card is legal. The maker
+  // may also cut with the indicator (so we include its id). BUT (v2.2.5)
+  // non-indicator trumps in the trump maker's hand are NOT legal in a
+  // closed game — they can't be played face-down, and a face-up play
+  // isn't allowed when can't-follow either. The non-indicator trumps
+  // stay in hand until the game opens (via an indicator cut or the
+  // bid≥250 auto-open rule).
+  let handIds;
+  if (state.trumpMaker === seat && !state.isOpenTrump && !state.trumpRevealed) {
+    handIds = hand
+      .filter((c) => c.id !== indicatorId && c.suit !== state.trumpSuit)
+      .map((c) => c.id);
+  } else {
+    handIds = hand.filter((c) => c.id !== indicatorId).map((c) => c.id);
+  }
+  const ids = handIds.slice();
   if (hasIndicator) ids.push(indicatorId);
   if (ids.length > 0) return ids;
+  // Degenerate: nothing left but non-indicator trumps and no indicator.
+  // This shouldn't happen in a closed game (see ADR); defensively fall
+  // back to the full hand so the engine never deadlocks.
   return hand.map((c) => c.id);
 }
 

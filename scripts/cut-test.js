@@ -167,4 +167,52 @@ console.log('\nTest 3: face-down non-trump stays hidden permanently');
   assert(s.trickLeader === 0, 'highest hearts card wins (seat 0)');
 }
 
+console.log('\nTest 4: maker cannot play non-indicator trump face-down (v2.2.5)');
+{
+  const s = fixture();
+  // Put a NON-indicator trump (JS) in the maker's hand, plus a non-trump.
+  // Seat 1 is about to lead hearts; seat 0 (maker) has no hearts.
+  s.hands[0] = [
+    { rank: 'J', suit: 'S', id: 'JS' },  // non-indicator trump
+    { rank: 'Q', suit: 'C', id: 'QC' },  // non-trump (disposal-eligible)
+  ];
+  s.currentPlayer = 1;
+  s.trickLeader = 1;
+  s.currentTrick = [];
+  s.tricksPlayed = 1;
+
+  let r = game.applyAction(s, 1, { type: 'playCard', cardId: '7H' });
+  assert(r.ok, 'seat 1 leads 7H');
+  // Skip seats 3 and 2 for brevity — route play to seat 0. Since we just
+  // want to test seat 0's legal actions and the engine's rejection, we
+  // can manipulate currentPlayer directly.
+  // Actually let's play through: 1 → 0.
+  // Wait, with dealer=1 we had trickLeader=1 and currentPlayer=1. After
+  // seat 1 leads, next player is (1+3)%4 = 0. So seat 0 is next.
+  assert(s.currentPlayer === 0, 'seat 0 is next after seat 1 leads');
+
+  // legalActions for seat 0: the non-indicator trump JS must be EXCLUDED.
+  const view0 = game.viewFor(s, 0);
+  const playAction = view0.legalActions.find((a) => a.type === 'playCard');
+  assert(playAction, 'seat 0 has a playCard action');
+  assert(!playAction.cardIds.includes('JS'),
+    'non-indicator trump JS is NOT in maker\'s legal cardIds');
+  assert(playAction.cardIds.includes('QC'),
+    'non-trump QC IS legal (disposal path)');
+  assert(playAction.cardIds.includes('10S'),
+    'indicator 10S IS legal (cut path)');
+
+  // Engine also rejects the action server-side (defense in depth).
+  const bad = game.applyAction(s, 0, { type: 'playCard', cardId: 'JS', faceDown: true });
+  assert(!bad.ok && /non-indicator trump/.test(bad.reason),
+    'engine rejects maker\'s non-indicator trump face-down play');
+
+  // Playing QC face-down (disposal) is accepted.
+  const qc = game.applyAction(s, 0, { type: 'playCard', cardId: 'QC', faceDown: true });
+  assert(qc.ok, 'maker can play non-trump face-down (disposal)');
+  const play = s.currentTrick.find((p) => p.seat === 0);
+  assert(play.faceDown === true, 'QC is face-down in the trick record');
+  assert(play.card.id === 'QC', 'QC is the card played');
+}
+
 console.log('\nAll cut-mechanic tests passed.');

@@ -164,9 +164,18 @@ scoring) uses the internal value unchanged.
   - **Discard** a non-trump card face-down (throw it away; it cannot win).
   - **Cut** by playing a trump-suited card face-down — if it's the
     highest trump on the trick, their team wins.
-  - The trump maker picks freely between the two (they know which card
-    is trump). A non-trump-holder is "submitting a card": they guess
-    whether trump is the suit they've chosen.
+- **Trump maker's face-down is restricted** *(house rule, v2.2.5)*:
+  the maker can only play face-down either (a) a non-trump card
+  (disposal) OR (b) the **indicator** itself (cut). A non-indicator
+  trump from the maker's hand is never a legal face-down play. This
+  means: whenever the maker "cuts", the card that's flipped face-up
+  at trick end is necessarily the preselected indicator.
+  Non-indicator trumps stay in the maker's hand until the game opens
+  (via an indicator cut, or the bid-≥250 auto-open after trick 1,
+  or an explicit open declaration). `legalCardIds` omits non-indicator
+  trumps; `handlePlay` also rejects them server-side.
+- Other players (non-makers) can cut with any trump from their hand
+  — they don't have an indicator, so the restriction doesn't apply.
 - **Visibility** while the trick is in progress:
   - **The cutter** sees their own card (it's their tap).
   - **The trump maker** privately sees every face-down card face-up (the
