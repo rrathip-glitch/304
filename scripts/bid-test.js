@@ -372,29 +372,41 @@ console.log('\nTest 9: partner-is-high lockout (v2.2.7, tightened v2.2.10)');
     'engine rejects partner-overbid with explicit reason (fallback path)');
 }
 
-console.log('\nTest 10: partner-is-high lockout in bid8');
+console.log('\nTest 10: partner-is-high lockout in bid8 (soft, v2.2.15)');
 {
+  // New rule: in bid8 you CAN bid over your partner when their bid
+  // is below 250 — bid4 wins leave the 8-card range open for a
+  // partner's escalation. Hard lockout only re-engages at 250+.
   const s = fixtureSeated();
-  // Reach bid8 with seat 1 (trump maker + high bidder). Seat 3 is their
-  // partner (seats 1+3 = team 1). We want to be at seat 3's turn.
   s.phase = game.PHASES.BID8;
   s.dealer = 0;
   s.trumpMaker = 1;
   s.trumpSuit = 'S';
   s.trumpIndicator = { rank: '10', suit: 'S', id: '10S' };
   s.indicatorCardId = '10S';
-  s.highBid = { amount: 220, bidder: 1 };
+  s.highBid = { amount: 220, bidder: 1 };              // bid4-range partner high
   s.currentBidder = 3;                                  // partner's turn
   s.bid8Turns = 1;
+  s.bid8Acted = [false, true, false, false];            // maker already acted
   for (let i = 0; i < 4; i++) s.hands[i] = [];
 
   const view = game.viewFor(s, 3);
   const bidEntry = view.legalActions.find((a) => a.type === 'bid');
-  assert(!bidEntry, 'bid8: partner sees no bid when their partner is high bidder');
+  assert(bidEntry && bidEntry.amounts && bidEntry.amounts[0] === 250,
+    'bid8: partner CAN bid 250+ over a partner-bid4-high (<250)');
 
-  const r = game.applyAction(s, 3, { type: 'bid', amount: 250 });
-  assert(!r.ok && /cannot bid over your partner/.test(r.reason),
-    'bid8: engine rejects partner-overbid');
+  // Now raise the partner's bid to 250 and confirm the hard lockout
+  // re-engages at the 8-card threshold.
+  const s2 = { ...s, highBid: { amount: 250, bidder: 1 } };
+  s2.bid8Acted = s.bid8Acted.slice();
+  const view2 = game.viewFor(s2, 3);
+  const bidEntry2 = view2.legalActions.find((a) => a.type === 'bid');
+  assert(!bidEntry2 || !bidEntry2.amounts || bidEntry2.amounts.length === 0,
+    'bid8: partner sees no bid when partner is at 250+');
+
+  const r2 = game.applyAction(s2, 3, { type: 'bid', amount: 260 });
+  assert(!r2.ok && /cannot bid over your partner/.test(r2.reason),
+    'bid8: engine rejects partner-overbid at ≥ 250');
 }
 
 console.log('\nTest 11: indicatorLocation tracks through the hand (v2.2.7)');

@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.14';
+  const BUILD = '2.2.15';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -756,46 +756,40 @@
     renderLog(v.log || []);
   }
 
-  // Status-bar trump indicator. Renders one of:
-  //   • nothing — no trump picked yet (bidding or pre-pick phases)
-  //   • "TRUMP <suit> · OPEN" — trump is public (open declared, auto-open,
-  //                             or cut-revealed)
-  //   • "TRUMP <suit> · CLOSED" — you are the trump maker and know the
-  //                              suit, but it's still closed to others
-  //   • "TRUMP · CLOSED" — you're not the maker; suit is hidden
-  // The suit is rendered with its symbol and the standard red/black colour.
+  // v2.2.15: header trump status collapsed to a persistent GRAPHIC dial
+  // in the center of the top bar. The presence of a suit glyph IS the
+  // reveal — no OPEN/CLOSED text needed. Three states:
+  //   • no trump picked yet    → "?"          (dial.unknown)
+  //   • closed; you're a non-maker → "?"      (dial.closed)
+  //   • you're the maker OR trump is open → suit glyph in its colour
+  //                             (dial.open if globally revealed,
+  //                              dial.maker-only if only you can see it)
   function renderTrumpStatus(v) {
-    const el = $('#trump-status');
-    if (!el) return;
-    el.innerHTML = '';
-    el.classList.remove('open', 'closed', 'unknown');
-    if (!v || !v.trumpSuit) return;                      // pre-pick
+    const el = document.getElementById('trump-dial');
+    const inner = document.getElementById('trump-dial-inner');
+    if (!el || !inner) return;
+    inner.innerHTML = '';
+    el.classList.remove('open', 'closed', 'unknown', 'maker-only', 'color-red', 'color-black');
+
+    if (!v || !v.trumpSuit) {
+      // Pre-pick: "?" placeholder so the dial stays visually anchored.
+      inner.textContent = '?';
+      el.classList.add('unknown');
+      return;
+    }
     const isOpen = !!(v.isOpenTrump || v.trumpRevealed);
     const youAreMaker = v.trumpMaker === state.yourSeat;
-    // Non-makers in closed mode don't know the suit — server sends null
-    // for trumpSuit to them, so we never get here. But be defensive.
     const suitVisible = isOpen || youAreMaker;
 
-    const label = document.createElement('span');
-    label.className = 'ts-label';
-    label.textContent = 'Trump';
-    el.appendChild(label);
-
     if (suitVisible) {
-      const suit = document.createElement('span');
       const s = v.trumpSuit;
-      suit.className = 'ts-suit color-' + (s === 'H' || s === 'D' ? 'red' : 'black');
-      suit.textContent = ({ S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' })[s] || '?';
-      el.appendChild(suit);
+      inner.textContent = ({ S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' })[s] || '?';
+      el.classList.add(isOpen ? 'open' : 'maker-only');
+      el.classList.add('color-' + (s === 'H' || s === 'D' ? 'red' : 'black'));
+    } else {
+      inner.textContent = '?';
+      el.classList.add('closed');
     }
-
-    const status = document.createElement('span');
-    status.className = 'ts-state';
-    status.textContent = isOpen ? 'OPEN' : 'CLOSED';
-    el.appendChild(status);
-
-    el.classList.add(isOpen ? 'open' : 'closed');
-    if (!suitVisible) el.classList.add('unknown');
   }
 
   // The old #indicator-strip was removed in v2.2.9 — the maker now sees
@@ -960,33 +954,31 @@
         indEl.remove();
       }
 
-      // Bid indicator
+      // Bid label + kind-class so CSS can style pass/ask/bid distinctly.
       const bidEl = el.querySelector('.seat-bid');
-      bidEl.textContent = bidLabelFor(v, seat);
+      const info = bidLabelFor(v, seat);
+      bidEl.textContent = info.text || '';
+      bidEl.classList.remove('kind-pass', 'kind-ask', 'kind-bid');
+      if (info.kind) bidEl.classList.add('kind-' + info.kind);
     }
   }
 
   function bidLabelFor(v, seat) {
-    if (!v) return '';
-    // Per-seat "bid N" / "pass" chips are only meaningful WHILE bidding
-    // is in progress. Once the hand transitions to trump pick / play,
-    // the bid-strip at the top of the table carries the winning bid +
-    // bidder — the per-seat labels become clutter and were persisting
-    // "pass" / "bid 100" into the trick view (reported as stale UI).
+    if (!v) return { text: '', kind: null };
+    // Per-seat "bid N" / "pass" labels are only meaningful WHILE bidding
+    // is in progress. In play, the bid-strip + header carry the winning
+    // bid — these per-seat labels become clutter.
     const isBiddingPhase = v.phase === 'bid4' || v.phase === 'bid8';
-    if (!isBiddingPhase) return '';
+    if (!isBiddingPhase) return { text: '', kind: null };
     if (v.highBid && v.highBid.bidder === seat) {
-      return 'bid ' + displayBid(v.highBid.amount);
+      return { text: 'bid ' + displayBid(v.highBid.amount), kind: 'bid' };
     }
     if (v.passedSeats && Array.isArray(v.passedSeats) && v.passedSeats.indexOf(seat) !== -1) {
-      // The asker's per-seat label reads "ask" instead of "pass" so
-      // other players can see who made the ask (v2.2.3: askPartner
-      // counts as a pass, but it's useful to distinguish).
-      const bid = v.bids && v.bids.length ? v.bids.find((b) => b.seat === seat && b.type === 'askPartner') : null;
-      if (bid) return 'ask';
-      return 'pass';
+      const asker = v.bids && v.bids.length ? v.bids.find((b) => b.seat === seat && b.type === 'askPartner') : null;
+      if (asker) return { text: 'ask', kind: 'ask' };
+      return { text: 'pass', kind: 'pass' };
     }
-    return '';
+    return { text: '', kind: null };
   }
 
   function renderYouSeat(v) {
