@@ -50,6 +50,13 @@ function createGame(roomId = '') {
     // (which is symmetric and only controls the ≥200 floor).
     isAsker: [false, false, false, false],
     bid8Turns: 0,
+    // v2.2.11: per-seat "has acted in bid8". The 8-card round is strictly
+    // "one turn each" — a seat that bid-then-got-outbid does NOT get a
+    // second chance. We track this explicitly so that the trump_pick2
+    // detour correctly resumes bid8 with only the seats who haven't
+    // taken their turn yet, per user rule "higher bid wins going in
+    // play order" (every seat gets its one shot; the best bid wins).
+    bid8Acted: [false, false, false, false],
     highBid: null,
     trumpMaker: null,
     trumpIndicator: null,
@@ -112,6 +119,7 @@ function startHand(state, rng = Math.random) {
   state.tricksPlayed = 0;
   state.lastTrick = null;
   state.bid8Turns = 0;
+  state.bid8Acted = [false, false, false, false];
   state.cutResolved = false;
   state.openIndicatorId = null;
 
@@ -290,9 +298,17 @@ function advanceBid4(state) {
   }
 
   const activeBidders = [0, 1, 2, 3].filter((s) => !state.passedSeats.includes(s));
-  // If a high bid exists and no other active bidders could raise, the bid wins.
+  // v2.2.11: "other team responds, not you or your teammate." A contender
+  // is an active bidder who could legally outbid the current high bid —
+  // i.e., not the high bidder, not their partner (already auto-passed,
+  // but re-check in case sticky passes skew the list), and not an asker
+  // locked out. If no such contender exists, the bid wins in play order.
   if (state.highBid) {
-    const contenders = activeBidders.filter((s) => s !== state.highBid.bidder);
+    const contenders = activeBidders.filter((s) =>
+      s !== state.highBid.bidder &&
+      !partnerIsHighBidder(state, s) &&
+      !state.isAsker[s]
+    );
     if (contenders.length === 0) return enterTrumpPick1(state);
   }
   // All four passed without any bid → redeal.
@@ -302,11 +318,19 @@ function advanceBid4(state) {
     startHand(state);
     return { ok: true };
   }
-  // Advance to next seat not yet passed; if high bidder themselves passed,
-  // the loop above already transitioned. Defensive cap prevents any accidental
-  // infinite loop.
+  // Advance to next seat that hasn't passed AND isn't locked out (asker /
+  // self-high-bidder / partner-of-high-bidder). Prevents the rotation
+  // from landing on a seat whose only legal action is pass.
   let p = next(state.currentBidder);
-  for (let i = 0; i < 4 && state.passedSeats.includes(p); i++) p = next(p);
+  for (let i = 0; i < 4; i++) {
+    const locked =
+      state.passedSeats.includes(p) ||
+      state.isAsker[p] ||
+      (state.highBid && state.highBid.bidder === p) ||
+      partnerIsHighBidder(state, p);
+    if (!locked) break;
+    p = next(p);
+  }
   state.currentBidder = p;
   return { ok: true };
 }
@@ -336,21 +360,30 @@ function handleTrumpPick(state, seat, action, round) {
     state.phase = PHASES.BID8;
     state.currentBidder = state.trumpMaker;
     state.bid8Turns = 0;
+    state.bid8Acted = [false, false, false, false];
     log(state, 'Second batch dealt. 8-card bidding (min 250).');
   } else {
-    state.phase = PHASES.OPEN_CHOICE;
-    state.currentBidder = null;
+    // v2.2.11: after a bid8 outbid + new trump pick, resume bid8 so the
+    // remaining seats (those that haven't yet had their "one turn each"
+    // shot) can respond in play order. advanceBid8 will short-circuit
+    // to OPEN_CHOICE if no contenders remain.
+    state.phase = PHASES.BID8;
+    state.currentBidder = state.trumpMaker;   // advanceBid8 starts at next()
+    return advanceBid8(state);
   }
   return { ok: true };
 }
 
 function handleBid8(state, seat, action) {
   if (seat !== state.currentBidder) return fail('not your turn');
+  // Defensive init so test fixtures that seed BID8 directly don't crash
+  // on bid8Acted access (startHand initializes it for real games).
+  if (!state.bid8Acted) state.bid8Acted = [false, false, false, false];
   const { type } = action;
-  const partner = partnerOf(seat);
 
   if (type === 'pass') {
     state.bid8Turns += 1;
+    state.bid8Acted[seat] = true;
     log(state, `${state.seats[seat].name} passed in 8-card round.`);
     return advanceBid8(state);
   }
@@ -366,11 +399,28 @@ function handleBid8(state, seat, action) {
     // House rule (v2.2.7): cannot bid over your partner, full stop.
     if (partnerIsHighBidder(state, seat)) return fail('cannot bid over your partner');
     if (state.highBid && amount <= state.highBid.amount) return fail('must exceed current high bid');
+    // v2.2.11: one turn per seat in bid8. A seat that acted once
+    // (pass or bid) cannot act again — "higher bid wins going in
+    // play order" means every seat gets exactly one shot.
+    if (state.bid8Acted[seat]) return fail('you already had your 8-card turn');
+
+    state.bid8Acted[seat] = true;
 
     const newMaker = seat;
     if (newMaker !== state.trumpMaker) {
+      // v2.2.11: auto-pass the new bidder's partner for the 8-card
+      // round too — they can't bid over their own partner. Matches
+      // bid4 partner-lockout symmetry.
+      const newPartner = partnerOf(seat);
+      if (state.seats[newPartner] && !state.bid8Acted[newPartner]) {
+        state.bid8Acted[newPartner] = true;
+        state.bid8Turns += 1;
+        state.bids.push({ seat: newPartner, type: 'autoPass', reason: 'partner-high', round: 8 });
+        log(state, `${state.seats[newPartner].name} auto-passed in 8-card round (partner is high bidder).`);
+      }
       state.hands[state.trumpMaker].push(state.trumpIndicator);
       state.trumpIndicator = null;
+      state.indicatorCardId = null;
       state.trumpSuit = null;
       state.trumpMaker = newMaker;
       state.highBid = { amount, bidder: seat };
@@ -391,14 +441,39 @@ function handleBid8(state, seat, action) {
   return fail('invalid bid8 action');
 }
 
+// After any bid8 action (or after trump_pick2 returns control to bid8),
+// find the next seat that hasn't acted yet AND isn't locked out. If no
+// such seat exists, bid8 closes.
 function advanceBid8(state) {
-  if (state.bid8Turns >= 4) {
-    state.phase = PHASES.OPEN_CHOICE;
-    state.currentBidder = null;
-    log(state, '8-card bidding closed.');
-    return { ok: true };
+  if (!state.bid8Acted) state.bid8Acted = [false, false, false, false];
+  // A seat is "locked" in bid8 if:
+  //   • they're already the high bidder (can't self-raise), OR
+  //   • their partner is the high bidder (can't overbid partner).
+  // We auto-advance past them so the remaining contenders get their
+  // "one turn each" chance in play order.
+  const startAt = state.currentBidder != null ? next(state.currentBidder) : state.trumpMaker;
+  let p = startAt;
+  for (let i = 0; i < 4; i++) {
+    if (!state.bid8Acted[p] && state.seats[p]) {
+      const isHighBidder = state.highBid && state.highBid.bidder === p;
+      const partnerLocked = partnerIsHighBidder(state, p);
+      if (isHighBidder || partnerLocked) {
+        // Auto-pass locked seats so they don't consume a real turn.
+        state.bid8Acted[p] = true;
+        state.bid8Turns += 1;
+        state.bids.push({ seat: p, type: 'autoPass', reason: isHighBidder ? 'self-high' : 'partner-high', round: 8 });
+        log(state, `${state.seats[p].name} auto-passed in 8-card round (${isHighBidder ? 'already high bidder' : 'partner is high bidder'}).`);
+      } else {
+        state.currentBidder = p;
+        return { ok: true };
+      }
+    }
+    p = next(p);
   }
-  state.currentBidder = next(state.currentBidder);
+  // No eligible bidder remains — bid8 closes.
+  state.phase = PHASES.OPEN_CHOICE;
+  state.currentBidder = null;
+  log(state, '8-card bidding closed.');
   return { ok: true };
 }
 

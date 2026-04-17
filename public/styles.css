@@ -639,6 +639,46 @@ button { cursor: pointer; }
  * the ONLY child (rare corner cases). */
 .your-hand .indicator-slot + .card { margin-left: 0; }
 
+/* Opponent indicator slot (v2.2.11) — scaled-down version for the
+ * top/left/right seat stacks. Renders the caller's picked card face-down
+ * while closed, face-up with a flip animation once trump is revealed.
+ * Positioned INSIDE .seat-cards so it's obviously part of the caller's
+ * deck but visually separated from the normal back stack via the badge
+ * and margin.
+ *
+ * Size: uses --card-w-sm (the back-stack card scale) instead of
+ * --card-w, so the slot sits naturally in the opponent stack.
+ * Badge is tighter and rendered at the side for horizontal stacks,
+ * above for vertical stacks. */
+.seat-cards .indicator-slot.opp {
+  margin-right: 8px;
+  padding-top: 12px;
+  /* Keep the slot flow-compatible with the negative margins the
+   * other back-stack cards use. */
+  z-index: 1;
+}
+.seat-cards.vertical .indicator-slot.opp {
+  margin-right: 0;
+  margin-bottom: 10px;
+  padding-top: 12px;
+}
+.seat-cards .indicator-slot.opp .indicator-badge {
+  font-size: 8px;
+  padding: 1px 6px;
+  letter-spacing: 1px;
+}
+.seat-cards .indicator-slot.opp .card.indicator-card {
+  width: var(--card-w-sm);
+  height: var(--card-h-sm);
+  margin-left: 0 !important;
+  margin-top: 0 !important;
+}
+/* Prevent the back stack's overlapping margin from chewing into the
+ * indicator slot (the first real back after the slot should start
+ * fresh, not underneath). */
+.seat-cards .indicator-slot.opp + .card { margin-left: 0; }
+.seat-cards.vertical .indicator-slot.opp + .card { margin-top: 0; }
+
 /* ============ Play area (seats + trick) ============
  * Grid layout with content-sized side columns so opponent stacks claim only
  * the room they actually need. The center column expands to fill remaining
