@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.8';
+  const BUILD = '2.2.9';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -581,9 +581,9 @@
     phaseEl.classList.toggle('cutting', cutting);
 
     // Bid strip — visible across bidding AND play so the stake is
-    // always one glance away.
+    // always one glance away. Trump suit/status is in the header pill
+    // and (for the maker) on the labeled indicator card in their hand.
     renderBidStrip(v);
-    renderIndicatorStrip(v);
 
     // Seats
     renderOpponentSeats(v);
@@ -641,59 +641,11 @@
     if (!suitVisible) el.classList.add('unknown');
   }
 
-  // Indicator-status strip (v2.2.7). Renders one of:
-  //   • nothing — pre-pick, no indicator yet.
-  //   • card-back + "held face-down by <Maker>" — closed game.
-  //     Only the maker sees the face of the card (in their #your-trump
-  //     row); public viewers see a back.
-  //   • small face-up card + "in <Maker>'s hand (open)" — trump opened
-  //     (by cut-reveal, auto-open, or declared-open) and the maker is
-  //     still holding the card.
-  //   • small face-up card + "played" — the indicator has been played
-  //     (either the maker's own cut or the mandatory open-trick-1 lead).
-  function renderIndicatorStrip(v) {
-    const el = $('#indicator-strip');
-    if (!el) return;
-    el.innerHTML = '';
-    el.classList.remove('closed', 'in-hand', 'played');
-    if (!v || !v.indicatorLocation) return;
-    const makerName = v.trumpMaker != null ? nameOfSeat(v.trumpMaker) : 'maker';
-    const youAreMaker = v.trumpMaker === state.yourSeat;
-    const loc = v.indicatorLocation;
-    el.classList.add(loc === 'closed' ? 'closed' : loc === 'in-maker-hand' ? 'in-hand' : 'played');
-
-    const label = document.createElement('span');
-    label.className = 'is-label';
-    label.textContent = 'Indicator';
-    el.appendChild(label);
-
-    // Card thumb: face-down back while closed; face-up mini-card otherwise.
-    const cardWrap = document.createElement('span');
-    cardWrap.className = 'is-card';
-    if (loc === 'closed') {
-      cardWrap.appendChild(Cards.renderBack({ small: true }));
-    } else if (v.indicatorCard) {
-      const mini = Cards.render(v.indicatorCard, { small: true });
-      if (loc === 'played') mini.classList.add('dimmed');
-      cardWrap.appendChild(mini);
-    }
-    el.appendChild(cardWrap);
-
-    const status = document.createElement('span');
-    status.className = 'is-state';
-    if (loc === 'closed') {
-      status.textContent = youAreMaker
-        ? 'held by you (closed)'
-        : 'held by ' + makerName + ' (closed)';
-    } else if (loc === 'in-maker-hand') {
-      status.textContent = youAreMaker
-        ? 'in your hand (open)'
-        : 'in ' + makerName + "'s hand (open)";
-    } else {
-      status.textContent = 'played';
-    }
-    el.appendChild(status);
-  }
+  // The old #indicator-strip was removed in v2.2.9 — the maker now sees
+  // a labeled indicator card inline with their hand (see renderHand). The
+  // indicator card's location is still carried on the view via
+  // `v.indicatorLocation`/`v.indicatorCard` so the hand renderer can
+  // decide whether to inject the slot.
 
   function renderBidStrip(v) {
     const el = $('#bid-strip');
@@ -720,15 +672,9 @@
     bidder.textContent = 'by ' + (youAreBidder ? 'you' : bidderName);
     el.appendChild(bidder);
 
-    // Show trump suit during play if it's revealed (or if you're the maker
-    // and it's still closed — they know it themselves).
-    if (v.trumpSuit && (v.trumpRevealed || v.isOpenTrump || v.trumpMaker === state.yourSeat)) {
-      const trump = document.createElement('span');
-      trump.className = 'bid-strip-trump';
-      const open = (v.isOpenTrump || v.trumpRevealed) ? '· open' : '· closed';
-      trump.textContent = '· trump ' + suitName(v.trumpSuit) + ' ' + open;
-      el.appendChild(trump);
-    }
+    // v2.2.9: the old "· trump <suit> · open/closed" tail was removed —
+    // that information is carried by the trump-status pill in the header,
+    // and (for the maker) by the labeled indicator card inside their hand.
   }
 
   function nameOfSeat(seat) {
@@ -820,34 +766,7 @@
     const el = $('#seat-bottom');
     el.querySelector('.seat-name').textContent = nameOfSeat(state.yourSeat) + ' (you)';
     el.querySelector('.seat-name').classList.toggle('active', v.currentPlayer === state.yourSeat);
-    renderYourTrump(v);
-    renderHand(v.yourHand || [], legalCardIdsFromView(v));
-  }
-
-  // Render the trump indicator card to the trump maker so they can see
-  // which card they picked. If the indicator id is in the legal-action set
-  // (trick-8 forced lead, or the maker's own face-down cut), the card is
-  // rendered tappable here — this fixes the dead-screen bug where the maker
-  // had only the indicator left and the hand row was empty.
-  function renderYourTrump(v) {
-    const el = $('#your-trump');
-    if (!el) return;
-    el.innerHTML = '';
-    if (!v || !v.trumpIndicator) return;
-    if (v.trumpMaker !== state.yourSeat) return;
-    const label = document.createElement('span');
-    label.className = 'your-trump-label';
-    label.textContent = v.trumpRevealed ? 'Trump (open)' : 'Your trump';
-    el.appendChild(label);
-
-    const legalIds = legalCardIdsFromView(v);
-    const isTappable = legalIds.has(v.trumpIndicator.id);
-    const cardEl = Cards.render(v.trumpIndicator, {
-      small: true,
-      legal: isTappable,
-      onClick: isTappable ? (card) => onCardTap(card, true) : null,
-    });
-    el.appendChild(cardEl);
+    renderHand(v);
   }
 
   function legalCardIdsFromView(v) {
@@ -861,14 +780,66 @@
     return set;
   }
 
-  function renderHand(hand, legalIds) {
+  // Render the maker's / your hand. The trump indicator (if you're the
+  // maker and it's still un-played) is rendered AS A CARD in this same
+  // row, wrapped in a labeled frame with a visible gap so the other cards
+  // obviously shift around it. The indicator flips face-down → face-up
+  // when the game opens, and is tappable per `legalIds`. This replaces
+  // the old separate #your-trump row + #indicator-strip banner.
+  function renderHand(v) {
     const el = $('#your-hand');
     el.innerHTML = '';
-    // Sort hand by suit then rank for stable display. The trump indicator
-    // (if held) is excluded — it's rendered separately in #your-trump.
-    const v = state.view;
-    const indicatorId = (v && v.trumpIndicator && v.trumpMaker === state.yourSeat) ? v.trumpIndicator.id : null;
+    if (!v) return;
+    const legalIds = legalCardIdsFromView(v);
+    const hand = (v.yourHand || []).slice();
+    const youAreMaker = v.trumpMaker === state.yourSeat;
+
+    // Resolve the indicator card + phase. Two representations depending
+    // on whether the game is closed:
+    //   closed → v.trumpIndicator carries the full card (maker only);
+    //            it is NOT in v.yourHand yet.
+    //   open  → indicator has been pushed into hands[maker]; it IS in
+    //            v.yourHand. v.indicatorCard is the canonical lookup.
+    let indicatorCard = null;     // the Card obj to render as indicator
+    let indicatorPhase = null;    // 'closed' | 'open'
+    if (youAreMaker && v.indicatorLocation === 'closed' && v.indicatorCard) {
+      indicatorCard = v.indicatorCard;
+      indicatorPhase = 'closed';
+    } else if (youAreMaker && v.indicatorLocation === 'in-maker-hand' && v.indicatorCard) {
+      indicatorCard = v.indicatorCard;
+      indicatorPhase = 'open';
+    }
+
+    // Sort the hand for stable display. Exclude the indicator from the
+    // normal run so we can slot it back in with its special wrapper.
+    const indicatorId = indicatorCard ? indicatorCard.id : null;
     const sorted = hand.slice().filter((c) => c.id !== indicatorId).sort(cardSortCompare);
+
+    // If there's an indicator to show, inject its wrapper first (leftmost
+    // in the row; visually separated via CSS margin + label).
+    if (indicatorCard) {
+      const wrap = document.createElement('div');
+      wrap.className = 'indicator-slot ' + indicatorPhase;
+
+      const badge = document.createElement('span');
+      badge.className = 'indicator-badge';
+      badge.textContent = indicatorPhase === 'open' ? 'Indicator · open' : 'Indicator';
+      wrap.appendChild(badge);
+
+      const isTappable = legalIds.has(indicatorCard.id);
+      // Closed indicator renders face-DOWN (matches the "placed face-down
+      // on the table" reality). On open it's face-up — the CSS `.open`
+      // class drives the flip animation.
+      const cardEl = Cards.render(indicatorCard, {
+        faceDown: indicatorPhase === 'closed',
+        legal: isTappable,
+        onClick: isTappable ? (card) => onCardTap(card, true) : null,
+      });
+      cardEl.classList.add('indicator-card');
+      wrap.appendChild(cardEl);
+      el.appendChild(wrap);
+    }
+
     for (const c of sorted) {
       const legal = legalIds.has(c.id);
       const cardEl = Cards.render(c, {
@@ -935,18 +906,11 @@
       const slot = slots[slotName];
       if (!slot) continue;
       slot.innerHTML = '';
-      const tag = document.createElement('div');
-      tag.className = 'seat-tag';
-      // If the play is face-down (a cut), mark the tag so every player sees
-      // "CUT — Name" — communicates the intent of the face-down play even
-      // before reveal. The card itself stays a back to non-privileged seats.
-      if (p.faceDown && !p.isTrumpIndicator) {
-        tag.textContent = 'cut — ' + nameOfSeat(p.seat);
-      } else {
-        tag.textContent = nameOfSeat(p.seat);
-      }
-      slot.appendChild(tag);
-
+      // v2.2.9: seat-name tags above trick cards removed. The player is
+      // unambiguous from the slot position (top/left/right/bottom map to
+      // partner/left-opp/right-opp/you), and rank + suit are on the card
+      // corners. For cut plays, the face-down back is visually distinct
+      // and the "CUT!" flash + log entry already narrate the action.
       const isFaceDown = !!(p.faceDown || p.hidden);
       let cardEl;
       if (isFaceDown && !p.card) {

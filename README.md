@@ -1,6 +1,6 @@
 # 304 — Mobile Multiplayer Card Game
 
-[![version](https://img.shields.io/badge/version-2.2.8-blue.svg)](#release-notes)
+[![version](https://img.shields.io/badge/version-2.2.9-blue.svg)](#release-notes)
 
 A web-based implementation of **304**, a Sri Lankan trick-taking card game.
 Built mobile-first for seamless play between two humans (e.g. you and your
@@ -34,6 +34,25 @@ Any empty seats are filled by the AI.
 Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Release Notes
+
+### v2.2.9 — 2026-04-17
+
+- **Indicator card is now inline with the maker's hand.** The old
+  standalone indicator-strip banner and the `#your-trump` row above
+  the hand are both gone. The indicator now sits IN the hand row
+  itself, wrapped in a labeled `.indicator-slot`: a gold "Indicator"
+  badge above the card, a gold ring around the card, and a 24 px
+  gap from neighbouring cards so they obviously shift around it.
+  When the trump opens, the card plays a flip animation from face-
+  down to face-up. Still tappable per the legal-action rules.
+- **Bid strip trimmed.** The `· trump <suit> · <open/closed>` tail
+  was removed — that information is carried by the TRUMP pill in the
+  header and (for the maker) by the labeled indicator card itself.
+- **Trick seat-name tags removed.** Player position at the table is
+  unambiguous from the trick-slot layout (partner top, opponents
+  left/right, you bottom). The corner rank/suit on the card already
+  conveys the play. Cut plays are still visually distinct (face-down
+  back) and narrated via the CUT! flash + log.
 
 ### v2.2.8 — 2026-04-17
 

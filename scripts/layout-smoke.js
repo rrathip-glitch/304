@@ -77,8 +77,8 @@ assert(
   'styles.css defines .maker-peek (trump maker can see face-down cuts)',
 );
 assert(
-  /\.your-trump\s+\.card\.legal/.test(css),
-  'styles.css makes the trump indicator card tappable when legal',
+  /\.indicator-slot\s+\.card\.indicator-card/.test(css),
+  'styles.css styles the inline indicator card inside the hand (v2.2.9)',
 );
 assert(
   /@media\s*\(max-height:\s*640px\)/.test(css),
@@ -87,21 +87,20 @@ assert(
 
 // -- HTML structure checks --------------------------------------------------
 const html = read('public/index.html');
-assert(/id="your-trump"/.test(html), 'index.html has the trump indicator slot');
-assert(/id="your-hand"/.test(html), 'index.html has the player hand slot');
+assert(/id="your-hand"/.test(html), 'index.html has the player hand slot (v2.2.9 also hosts the inline indicator)');
 assert(/id="phase-banner"/.test(html), 'index.html has the phase banner');
-assert(/v=2\.2\.8/.test(html), 'index.html uses semver cache-bust marker (v2.2.8)');
+assert(/v=2\.2\.9/.test(html), 'index.html uses semver cache-bust marker (v2.2.9)');
 assert(/id="bid-strip"/.test(html), 'index.html has the bid-strip element');
 
 // -- Client behavior checks (parse client.js for the expected hooks) -------
 const client = read('public/client.js');
 assert(
-  /BUILD\s*=\s*'2\.2\.8'/.test(client),
-  'client.js declares BUILD = "2.2.8" (semver, not codename)',
+  /BUILD\s*=\s*'2\.2\.9'/.test(client),
+  'client.js declares BUILD = "2.2.9" (semver, not codename)',
 );
 assert(
-  /isTappable\s*=\s*legalIds\.has\(v\.trumpIndicator\.id\)/.test(client),
-  'client.js makes the trump indicator card tappable when its id is legal',
+  /isTappable\s*=\s*legalIds\.has\(indicatorCard\.id\)/.test(client),
+  'client.js makes the inline indicator card tappable when its id is legal (v2.2.9)',
 );
 assert(
   /makerPeek/.test(client),
@@ -192,47 +191,63 @@ assert(
 );
 assert(
   /cannot bid over your partner/.test(game),
-  'game.js rejects partner-overbid in both bid4 and bid8 (v2.2.8)',
+  'game.js rejects partner-overbid in both bid4 and bid8 (v2.2.9)',
 );
 assert(
   /indicatorLocation/.test(game),
-  'game.js exposes indicatorLocation on the view (v2.2.8)',
+  'game.js exposes indicatorLocation on the view (v2.2.9)',
 );
 assert(
-  /id="indicator-strip"/.test(html),
-  'index.html has the indicator-strip element (v2.2.8)',
+  !/id="indicator-strip"/.test(html),
+  'v2.2.9 removed the standalone indicator-strip element',
 );
 assert(
-  /renderIndicatorStrip/.test(client),
-  'client.js renders the indicator-status strip (v2.2.8)',
+  !/id="your-trump"/.test(html),
+  'v2.2.9 removed the standalone your-trump row',
 );
 assert(
-  /\.indicator-strip/.test(css),
-  'styles.css styles the indicator-status strip (v2.2.8)',
+  /indicator-slot/.test(client),
+  'client.js renders the inline indicator slot in the hand (v2.2.9)',
+);
+assert(
+  /\.indicator-slot/.test(css) && /\.indicator-badge/.test(css),
+  'styles.css defines the inline indicator slot + badge (v2.2.9)',
+);
+assert(
+  /@keyframes\s+indicatorFlip/.test(css),
+  'styles.css has the indicator flip animation (v2.2.9)',
+);
+assert(
+  !/className\s*=\s*['"]seat-tag['"]/.test(client),
+  'client.js no longer renders seat-name tags above trick cards (v2.2.9)',
+);
+assert(
+  !/bid-strip-trump/.test(client),
+  'client.js no longer appends the "· trump … · open" tail to the bid strip (v2.2.9)',
 );
 assert(
   /\.trick-card[^}]*max-height:\s*100%/s.test(css),
-  '.trick-card caps at cell height so cards never clip on short screens (v2.2.8)',
+  '.trick-card caps at cell height so cards never clip on short screens (v2.2.9)',
 );
 assert(
   /\.trick-card\s+\.card[^}]*aspect-ratio:\s*1\s*\/\s*1\.4/s.test(css),
-  'trick-card .card has aspect-ratio 1/1.4 for safe downscaling (v2.2.8)',
+  'trick-card .card has aspect-ratio 1/1.4 for safe downscaling (v2.2.9)',
 );
 assert(
   /id="flash-overlay"/.test(html),
-  'index.html has the flash-overlay element (v2.2.8)',
+  'index.html has the flash-overlay element (v2.2.9)',
 );
 assert(
   /\.flash-overlay/.test(css),
-  'styles.css defines the flash-overlay (v2.2.8)',
+  'styles.css defines the flash-overlay (v2.2.9)',
 );
 assert(
   /function showFlash/.test(client),
-  'client.js has a showFlash helper (v2.2.8)',
+  'client.js has a showFlash helper (v2.2.9)',
 );
 assert(
   /maybeFlashEvents/.test(client),
-  'client.js detects trump-reveal + trick-won transitions (v2.2.8)',
+  'client.js detects trump-reveal + trick-won transitions (v2.2.9)',
 );
 
 // -- AI behavior check ------------------------------------------------------

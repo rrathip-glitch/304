@@ -489,54 +489,68 @@ button { cursor: pointer; }
 .bid-strip .bid-strip-bidder { color: var(--cream); }
 .bid-strip .bid-strip-trump { color: var(--cream-dim); font-style: italic; }
 
-/* ============ Indicator-status strip (v2.2.7, compacted v2.2.8) ============
- * Single row showing the trump indicator card + its current location
- * (closed / in-maker-hand / played). Visible to every seat; the card
- * face is only populated when the indicator is publicly known.
- * Intentionally tiny — must not eat trick-area vertical on short phones. */
-.indicator-strip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 1px 10px;
-  font-size: 10px;
-  color: var(--cream-dim);
-  background: rgba(0, 0, 0, 0.2);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.25);
-  flex-shrink: 0;
-  min-height: 0;
-  line-height: 1.2;
-}
-.indicator-strip:empty { display: none; }
-.indicator-strip .is-label {
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  font-size: 9px;
-  color: var(--muted);
-}
-.indicator-strip .is-card {
+/* ============ Inline indicator slot (v2.2.9) ============
+ * The trump indicator is rendered AS PART of the maker's hand row
+ * (#your-hand), wrapped in .indicator-slot. That wrapper carries:
+ *   • a small "INDICATOR" badge above the card
+ *   • a gold ring + extra margin so the card obviously "sticks out"
+ *     from the run of normal hand cards
+ *   • a face-down → face-up flip when the game opens (.closed → .open)
+ * The wrapper participates in the hand's horizontal flex layout so the
+ * neighbouring cards visibly shift to accommodate it. */
+.indicator-slot {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
+  flex: 0 0 auto;
+  /* Visible gap from the rest of the hand. The next card's negative
+   * margin-left (−18 px) is cancelled and a positive gap added. */
+  margin-right: 24px;
+  /* Leave room for the badge above the card. */
+  padding-top: 14px;
+  position: relative;
 }
-.indicator-strip .is-card .card {
-  width: 20px;
-  height: 28px;
-  min-width: 20px;
+.indicator-slot .indicator-badge {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--gold);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
   box-shadow: 0 1px 2px rgba(0,0,0,0.4);
-  border-radius: 3px;
+  pointer-events: none;
+  z-index: 2;
 }
-.indicator-strip .is-card .card .c-rank { font-size: 8px; letter-spacing: 0; }
-.indicator-strip .is-card .card .c-suit { font-size: 7px; }
-.indicator-strip .is-card .card .card-center { font-size: 11px; }
-.indicator-strip .is-card .card.dimmed {
-  opacity: 0.55;
-  filter: grayscale(0.2);
+/* Make the indicator card itself obviously special: gold ring plus the
+ * flip animation when the game opens. */
+.indicator-slot .card.indicator-card {
+  box-shadow: 0 0 0 2px var(--gold), var(--shadow);
+  /* Side margin zeroed so the slot's margin-right controls spacing. */
+  margin-left: 0 !important;
+  transition: transform 520ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
-.indicator-strip .is-state { color: var(--cream); font-weight: 500; }
-.indicator-strip.closed .is-state { color: var(--cream-dim); }
-.indicator-strip.in-hand .is-state { color: var(--gold); font-weight: 700; }
-.indicator-strip.played .is-state { color: var(--cream-dim); font-style: italic; }
+/* Flip animation: closed → open transitions via the `.open` class on
+ * the slot. CSS flip = rotateY pivot on the card. The animation runs
+ * whenever the class switches from .closed to .open on re-render. */
+.indicator-slot.closed .card.indicator-card { transform: rotateY(0deg); }
+.indicator-slot.open .card.indicator-card {
+  animation: indicatorFlip 520ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+@keyframes indicatorFlip {
+  0%   { transform: rotateY(-180deg); opacity: 0.85; }
+  55%  { transform: rotateY(-8deg); opacity: 1; }
+  100% { transform: rotateY(0deg); }
+}
+/* Ensure the hand row doesn't swallow the slot's margin-right when it's
+ * the ONLY child (rare corner cases). */
+.your-hand .indicator-slot + .card { margin-left: 0; }
 
 /* ============ Play area (seats + trick) ============
  * Grid layout with content-sized side columns so opponent stacks claim only
@@ -638,15 +652,9 @@ button { cursor: pointer; }
 .trick-card.slot-right  { grid-column: 3; grid-row: 2; }
 .trick-card.slot-bottom { grid-column: 2; grid-row: 3; }
 .trick-card.slot-left   { grid-column: 1; grid-row: 2; }
-.trick-card .seat-tag {
-  position: absolute;
-  top: -12px;
-  font-size: 10px;
-  color: var(--cream-dim);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  white-space: nowrap;
-}
+/* v2.2.9: .trick-card .seat-tag was removed — position implies the
+ * player (partner top, opponents left/right, you bottom) and the
+ * card corners carry rank+suit. */
 .trick-card .card {
   animation: cardDrop 260ms ease;
   width: var(--card-w-trick);
@@ -698,28 +706,9 @@ button { cursor: pointer; }
 }
 .seat-bottom .seat-name { font-size: 11px; }
 
-/* Trump indicator row — visible to the trump maker; renders the indicator
- * card and (when its id is in legalActions) makes it tappable. */
-.your-trump {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 4px 8px 0;
-  min-height: 0;
-  flex-wrap: wrap;
-}
-.your-trump:empty { display: none; }
-.your-trump .your-trump-label {
-  font-size: 11px;
-  color: var(--cream-dim);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-.your-trump .card {
-  box-shadow: 0 0 0 2px var(--gold), var(--shadow);
-}
-.your-trump .card.legal { cursor: pointer; }
+/* v2.2.9: the separate .your-trump row above the hand was removed —
+ * the indicator is now rendered inline inside .your-hand via
+ * .indicator-slot (see the Inline indicator slot section above). */
 
 .your-hand {
   display: flex;
@@ -730,12 +719,12 @@ button { cursor: pointer; }
   justify-content: safe center;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 12px 8px 6px;
+  /* v2.2.9: extra top padding accommodates the indicator-slot's badge
+   * (~14 px). Bottom padding unchanged. min-height covers padding +
+   * card height so overflow-y:hidden doesn't clip the bottom corner. */
+  padding: 18px 8px 6px;
   gap: 0;
-  /* box-sizing: border-box — min-height must cover padding (18px) plus
-   * the full card height, or overflow-y clips the bottom rank/suit corner.
-   * +4px is a small cushion so focus rings / 1px borders stay visible. */
-  min-height: calc(var(--card-h) + 22px);
+  min-height: calc(var(--card-h) + 28px);
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
@@ -938,7 +927,7 @@ button { cursor: pointer; }
     --card-w-trick: clamp(46px, 13vw, 66px);
   }
   .seat-cards.vertical .card { margin-top: -32px; }
-  .your-hand { padding: 8px 6px 4px; min-height: calc(var(--card-h) + 16px); }
+  .your-hand { padding: 14px 6px 4px; min-height: calc(var(--card-h) + 22px); }
   .phase-banner { padding: 4px 8px; min-height: 22px; font-size: 12px; }
   .log-wrap { max-height: 80px; }
 }
