@@ -484,27 +484,26 @@ button { cursor: pointer; }
   min-width: 0;
   flex-shrink: 1;
 }
-/* v2.2.19: each .team is a fixed-width row with three aligned slots:
- *   [label (44 px)] [num /22] [bar, right-aligned]
- * The label has a locked width so "11" always starts at the same x
- * for both teams (previously the wider "THEM" label shoved the "11"
- * further right). The bar is pushed to the right via margin-left:auto
- * so its right edge is a consistent anchor across teams. */
+/* v2.2.19 / v2.2.20: each .team is a fixed-width row with three aligned
+ * slots — [label] [num /22] [bar, right-aligned]. The label has a
+ * locked width so "11" always starts at the same x for both teams.
+ * v2.2.20 trimmed the total width + the bar so the progress bar's right
+ * edge no longer kisses the center trump dial on narrow phones. */
 .team {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 13px;
   white-space: nowrap;
-  width: 158px;
+  width: 134px;
 }
 .team .label {
   color: var(--cream-dim);
   text-transform: uppercase;
-  letter-spacing: 1.6px;
+  letter-spacing: 1.5px;
   font-size: 11px;
   font-weight: 700;
-  width: 44px;
+  width: 40px;
   flex: none;
 }
 .team-0 .label { color: var(--gold); }
@@ -544,7 +543,7 @@ button { cursor: pointer; }
 }
 .pips .pips-bar {
   display: inline-block;
-  width: 44px;
+  width: 32px;
   height: 6px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -958,11 +957,15 @@ button { cursor: pointer; }
 }
 .seat-cards.vertical {
   flex-direction: column;
-  /* Cap the vertical stack inside the available column height so a long
-   * back-row never overflows the play area (the bug shown when 8 cards
-   * stacked vertically clipped past the screen). */
-  max-height: calc(100% - 28px);
+  /* v2.2.20: cap accounts for BOTH the name pill (32 px = 26 + 6 mt)
+   * AND the bid pill (30 px = 24 + 6 mt) + a few px buffer — previously
+   * only subtracted ~28 px, so on dense stacks the bid pill at the
+   * bottom got pushed past the cell and clipped by .play-area's
+   * overflow:hidden. The cards themselves still use a tight negative
+   * margin-top to fit visually. */
+  max-height: calc(100% - 70px);
   overflow: hidden;
+  flex: 0 1 auto;
 }
 .seat-cards .card { width: var(--card-w-sm); height: var(--card-h-sm); margin-left: -14px; }
 .seat-cards .card:first-child { margin-left: 0; }
