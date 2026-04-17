@@ -44,6 +44,11 @@ function createGame(roomId = '') {
     passedSeats: [],
     bidTurns: [0, 0, 0, 0],
     askedPartner: [false, false, false, false],
+    // Per-seat "I am the one who called askPartner this round." The
+    // asker's only action for the rest of the round is pass — they've
+    // delegated the bid to their partner. Distinct from askedPartner[]
+    // (which is symmetric and only controls the ≥200 floor).
+    isAsker: [false, false, false, false],
     highBid: null,
     trumpMaker: null,
     trumpIndicator: null,
@@ -88,6 +93,7 @@ function startHand(state, rng = Math.random) {
   state.passedSeats = [];
   state.bidTurns = [0, 0, 0, 0];
   state.askedPartner = [false, false, false, false];
+  state.isAsker = [false, false, false, false];
   state.highBid = null;
   state.trumpMaker = null;
   state.trumpIndicator = null;
@@ -203,13 +209,15 @@ function handleBid4(state, seat, action) {
     const amount = action.amount | 0;
     if (amount % 10 !== 0) return fail('bids must be multiples of 10');
     if (amount < 160) return fail('minimum bid is 160');
-    // House rule (v2.1.0): you cannot bid over yourself. Once you're the
-    // current high bidder, your only options on a future turn are to pass
-    // (or wait for someone else to outbid you). Removing the self-overbid
-    // path makes the conversation around the table simpler — there's no
-    // tactical reason to inflate your own bid in 304, and the UI was
-    // surfacing the option in error.
+    // House rule (v2.1.0): you cannot bid over yourself.
     if (state.highBid && state.highBid.bidder === seat) return fail('you are already the high bidder');
+    // House rule (v2.2.1): once you've asked your partner to bid, you've
+    // delegated the call — you can only pass for the rest of this round.
+    // The partner can bid freely (subject to the ≥200 floor from the
+    // askedPartner[] flag). Without this rule, a player could ask partner
+    // to bid and then outbid the partner's own raise on their next turn,
+    // which breaks the "I pass the call" social contract of askPartner.
+    if (state.isAsker[seat]) return fail('you asked partner to bid — you can only pass this round');
     const floor = minAllowedBid(state, seat);
     if (amount < floor) return fail(`your bid floor is ${floor}`);
     if (state.highBid && amount <= state.highBid.amount) return fail('must exceed current high bid');
@@ -228,6 +236,7 @@ function handleBid4(state, seat, action) {
     state.bidTurns[seat] += 1;
     state.askedPartner[seat] = true;
     state.askedPartner[partner] = true;
+    state.isAsker[seat] = true;  // v2.2.1: asker is locked out of bidding
     state.bids.push({ seat, type: 'askPartner' });
     log(state, `${state.seats[seat].name} asked partner to bid.`);
     state.currentBidder = partner;
@@ -601,12 +610,16 @@ function handleHandEnd(state, seat, action) {
 function legalActions(state, seat) {
   if (state.phase === PHASES.BID4 && seat === state.currentBidder) {
     const list = [];
-    // No self-overbid: if you're already the high bidder, your only path
-    // is to pass (or askPartner / demandRedeal on first turn — both are
-    // already gated on bidTurns === 0, so neither overlaps with this case
-    // since to be the high bidder you've already bid once).
+    // Two paths that lock a seat out of bidding for the rest of the round:
+    //   1. No self-overbid (v2.1.0): once you're the current high bidder,
+    //      you can only pass.
+    //   2. Asker lockout (v2.2.1): once you've asked partner to bid, you
+    //      can only pass — you've delegated the call to your partner.
+    // In both cases we return an empty `amts` so the UI doesn't even
+    // render bid chips for the seat.
     const isHighBidder = state.highBid && state.highBid.bidder === seat;
-    const amts = isHighBidder ? [] : bidAmountsLegal(state, seat);
+    const isAsker = state.isAsker[seat];
+    const amts = (isHighBidder || isAsker) ? [] : bidAmountsLegal(state, seat);
     if (amts.length) list.push({ type: 'bid', amounts: amts });
     list.push({ type: 'pass' });
     if (state.bidTurns[seat] === 0 && state.seats[partnerOf(seat)]) {

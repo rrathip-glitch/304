@@ -302,5 +302,57 @@ test-covered piece of `server.js`:
 
 ---
 
+## 2026-04-17 — Asker lockout after askPartner — v2.2.1
+
+**Decision:** When a player calls `askPartner` in the 4-card bid round,
+set `state.isAsker[seat] = true`. For the rest of the round, that
+seat's only legal action is `pass`. `bid` is stripped from their
+`legalActions` and `handleBid4` rejects the action server-side.
+
+**Source:** User message ("You should not be able to bid on the round
+after asking your partner").
+
+**Rationale:** `askPartner` is an explicit delegation — "I don't have
+the call; my partner might". If the asker can then outbid the
+partner's own raise, it breaks the social contract of the gesture and
+opens exploits (ask partner into a small bid to signal, then bid over
+them to grab the call).
+
+The new field `state.isAsker[]` is distinct from the pre-existing
+`state.askedPartner[]`. The latter is symmetric (both asker and
+partner are flagged, used only to raise the ≥200 floor for the rest
+of the round). The former fires only on the asker.
+
+---
+
+## 2026-04-17 — Token scale locked in via tests — v2.2.1
+
+**Decision:** The household token table (see `docs/RULES.md#normal-outcomes`)
+is now under test in `scripts/bid-test.js#Test 7`. No code change —
+the table was already correct since v1 — but the rule is now pinned
+by pattern-matched assertions on `finalizeHand`'s source, so any
+future refactor that silently reshapes the table will fail the suite.
+
+**Source:** User message ("ensure the victory tokens are 3 for 25+, 2
+for 20+, and 1 for 16+ for the team betting that round and setting
+the trump or one more token each for the team that is showing points
+against the trump calling team (so 4 if the non callling team wins
+25+) making sure tokens taken from opponents").
+
+**Rule shape:**
+
+| Bid range | Caller wins | Non-caller wins |
+|-----------|-------------|-----------------|
+| 160–199   | 1           | 2               |
+| 200–249   | 2           | 3               |
+| 250+      | 3           | 4               |
+
+Transfer is zero-sum: loser's balance decreases by the same amount
+the winner's balance increases, capped at the loser's balance so no
+team ever goes negative. All-8-tricks "high court" remains a +5
+override.
+
+---
+
 *Append new entries below this line. Do not modify prior entries — if a
 decision is reversed, add a new entry that references and supersedes it.*

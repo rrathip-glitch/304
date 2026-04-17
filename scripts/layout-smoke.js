@@ -90,14 +90,14 @@ const html = read('public/index.html');
 assert(/id="your-trump"/.test(html), 'index.html has the trump indicator slot');
 assert(/id="your-hand"/.test(html), 'index.html has the player hand slot');
 assert(/id="phase-banner"/.test(html), 'index.html has the phase banner');
-assert(/v=2\.2\.0/.test(html), 'index.html uses semver cache-bust marker (v2.2.0)');
+assert(/v=2\.2\.1/.test(html), 'index.html uses semver cache-bust marker (v2.2.1)');
 assert(/id="bid-strip"/.test(html), 'index.html has the bid-strip element');
 
 // -- Client behavior checks (parse client.js for the expected hooks) -------
 const client = read('public/client.js');
 assert(
-  /BUILD\s*=\s*'2\.2\.0'/.test(client),
-  'client.js declares BUILD = "2.2.0" (semver, not codename)',
+  /BUILD\s*=\s*'2\.2\.1'/.test(client),
+  'client.js declares BUILD = "2.2.1" (semver, not codename)',
 );
 assert(
   /isTappable\s*=\s*legalIds\.has\(v\.trumpIndicator\.id\)/.test(client),
@@ -153,6 +153,14 @@ assert(
 assert(
   /must lead the trump indicator on trick 1/.test(game),
   'game.js enforces leading the indicator on trick 1 in open',
+);
+assert(
+  /isAsker\[seat\]/.test(game),
+  'game.js tracks per-seat asker status (v2.2.1 asker lockout)',
+);
+assert(
+  /you asked partner to bid — you can only pass this round/.test(game),
+  'game.js rejects bids from seats that have asked partner',
 );
 
 // -- AI behavior check ------------------------------------------------------

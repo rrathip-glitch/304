@@ -61,8 +61,13 @@ Household variant source: user messages dated 2026-04-16 (see DECISIONS.md).
 - **Partner-is-high restriction**: if the current high bidder is your
   partner, you may not bid <200 (you may still pass).
 - **Ask-partner-to-bid**: at your turn, you may ask your partner to bid in
-  your place. This counts as a turn for **both** players. After this, neither
-  of you may bid <200.
+  your place. This counts as a turn for **both** players. After this,
+  neither of you may bid <200. *(House rule, v2.2.1):* **the asker is
+  further locked out of bidding for the rest of the round** — they
+  delegated the call to their partner and may only pass on subsequent
+  turns. The partner can bid freely (subject to the ≥200 floor). The
+  UI omits bid chips from the asker's action bar; the engine rejects
+  `{type:'bid'}` from them defensively.
 - **Redeal demand**: the dealer's right-hand opponent, and *only* they,
   before their first bid/pass, may demand a redeal if their 4 cards total
   < 15 internal points (< 1.5 displayed). Same dealer reshuffles.
@@ -213,12 +218,21 @@ forced).
 
 ### Normal outcomes
 
-| Bid range | Win (success)         | Lose (failure) |
-|-----------|----------------------:|---------------:|
-| 160–199   | 1                     | 2              |
-| 200–249   | 2                     | 3              |
-| 250+      | 3                     | 4              |
-| PCC       | 4                     | 5              |
+Tokens are always transferred **from the losing team to the winning
+team** (zero-sum, capped at the loser's balance). The non-caller row
+is simply the caller's row + **one extra token** — the opposing team
+is rewarded for defeating the call.
+
+| Bid range | Caller's team wins | Non-caller team wins (caller fails) |
+|-----------|-------------------:|------------------------------------:|
+| 160–199   | **+1**             | **+2**                              |
+| 200–249   | **+2**             | **+3**                              |
+| 250+      | **+3**             | **+4**                              |
+| PCC       | +4                 | +5                                  |
+
+**Worked example:** caller bids 250, non-caller team wins more than
+30.4 − 25 = 5.4 points ⇒ non-caller team takes **4 tokens** from the
+caller's team.
 
 ### "High Court" override (house variant)
 
