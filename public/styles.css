@@ -455,146 +455,202 @@ button { cursor: pointer; }
 
 /* ============ Table ============ */
 #app.screen-table #table { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* v2.2.15: 3-column header — tokens left | trump dial center | hand+code right.
+ * Sides auto-size to content; the dial is absolutely anchored to the
+ * center of the header so the left/right sizes don't tug it off-axis. */
 .table-head {
+  position: relative;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: 6px 12px;
-  background: rgba(0,0,0,0.35);
-  border-bottom: 1px solid rgba(0,0,0,0.4);
-  min-height: 40px;
+  align-items: center;
+  padding: 8px 14px;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 100%),
+    radial-gradient(ellipse at center, rgba(230,200,106,0.05) 0%, transparent 60%);
+  border-bottom: 1px solid rgba(230, 200, 106, 0.18);
+  min-height: 46px;
   flex-shrink: 0;
   gap: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
-/* v2.2.14: both sides of the header stack as column flex with a matching
- * row rhythm (4px gap, 12–11px line-height). Prior layout wrapped the
- * right cluster ad-hoc, which made it misaligned with the left token
- * column. Now row 1 (tokens↔trump) and row 2 (second token↔hand+code)
- * share a baseline. */
-.tokens { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; }
-.team { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-.team .label { color: var(--cream-dim); text-transform: uppercase; letter-spacing: 1px; }
+.tokens {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-start;
+  min-width: 0;
+  flex-shrink: 1;
+}
+.team { display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+.team .label {
+  color: var(--cream-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 28px;
+}
 .team-0 .label { color: var(--gold); }
-/* v2.2.12: tokens now render as "<count> / 22" + a proportional bar.
- * The fixed-pip rendering was retired because both teams always drew
- * five dots regardless of actual count, which read the same at a glance
- * (misleading on the only thing that matters — the split). */
+.team-1 .label { color: #d9b8b8; }
+/* v2.2.15: token readout is "<N> / 22" + a small jewelled progress bar.
+ * Fill is a gold (team-0) or rose (team-1) gradient with an inner sheen
+ * stripe + a soft drop-glow that scales with the fill width. Shows the
+ * split at a glance without miscounting digits. */
 .pips {
   display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
+  align-items: center;
+  gap: 4px;
   flex-wrap: nowrap;
-  min-width: 62px;
+  min-width: 68px;
 }
 .pips .pips-num {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   color: var(--cream);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
 }
 .pips .pips-of {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--muted);
-  margin-right: 4px;
+  margin-right: 3px;
   font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 .pips .pips-bar {
   display: inline-block;
-  width: 34px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
+  width: 44px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
   overflow: hidden;
   align-self: center;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.4);
+  position: relative;
 }
 .pips .pips-fill {
   display: block;
   height: 100%;
-  background: var(--cream);
-  border-radius: 2px;
-  transition: width 360ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  border-radius: 999px;
+  transition: width 420ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  position: relative;
+}
+.pips .pips-fill::after {
+  /* Sheen: a soft lighter band across the top half of the fill. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 55%);
+  pointer-events: none;
 }
 .team-0 .pips-num { color: var(--gold); }
-.team-0 .pips-fill { background: var(--gold); }
-.team-1 .pips-num { color: #e6d0d2; }
-.team-1 .pips-fill { background: #c89fa0; }
+.team-0 .pips-fill {
+  background: linear-gradient(180deg, #f4dc8d 0%, #e6c86a 55%, #b7963c 100%);
+  box-shadow: 0 0 6px rgba(230, 200, 106, 0.55);
+}
+.team-1 .pips-num { color: #eacfd0; }
+.team-1 .pips-fill {
+  background: linear-gradient(180deg, #e4b5b7 0%, #c89fa0 55%, #8f6c6d 100%);
+  box-shadow: 0 0 6px rgba(200, 159, 160, 0.4);
+}
 
 /* Legacy `.pip` class kept as a no-op for any stale markup (e.g.
  * a pre-v2.2.12 cached client); hidden so the old dots don't leak. */
 .pip { display: none; }
-/* v2.2.14: right cluster matches the tokens column — two stacked rows.
- *   row 1: trump pill         (aligns with "US N/22")
- *   row 2: hand # · room code (aligns with "THEM N/22")
- * flex-direction: column-end keeps both rows right-aligned so the
- * header reads as a clean two-column layout regardless of phone width. */
+/* v2.2.15: right cluster — game code (bold gold, primary), hand # below
+ * (small muted, secondary). Vertical stack with the code as the eyebrow
+ * so it dominates over the phase-of-match hand number. */
 .head-right {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   align-items: flex-end;
-  font-size: 12px;
-  color: var(--cream-dim);
-  flex-shrink: 1;
-  min-width: 0;
-  max-width: 60%;
-}
-.head-right-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  line-height: 1;
-  white-space: nowrap;
-}
-.hand-num { text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
-
-/* ============ Status-bar trump indicator ============
- * Compact pill in the table header that always surfaces trump status:
- *   • nothing — pre-pick phase
- *   • TRUMP ♠ OPEN   — trump revealed to everyone
- *   • TRUMP ♠ CLOSED — you're the maker; suit visible only to you
- *   • TRUMP CLOSED   — you're not the maker; suit still hidden */
-.trump-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 11px;
-  letter-spacing: 0.5px;
-  line-height: 1;
-  white-space: nowrap;
-}
-.trump-status:empty { display: none; }
-.trump-status .ts-label {
-  text-transform: uppercase;
   color: var(--cream-dim);
-  font-size: 10px;
-  letter-spacing: 1px;
+  flex-shrink: 0;
+  min-width: 0;
+  line-height: 1.05;
 }
-.trump-status .ts-suit {
-  font-size: 14px;
-  line-height: 1;
-  /* The suit symbol is rendered in its suit colour on a cream disc so the
-   * red hearts/diamonds stay legible on the dark header. */
-  background: var(--cream);
-  border-radius: 4px;
-  padding: 0 3px;
-  min-width: 14px;
-  text-align: center;
-}
-.trump-status .ts-suit.color-red { color: var(--red); }
-.trump-status .ts-suit.color-black { color: var(--black); }
-.trump-status .ts-state {
+.hand-num {
   text-transform: uppercase;
-  font-weight: 700;
-  letter-spacing: 1px;
-  font-size: 10px;
+  letter-spacing: 1.2px;
+  white-space: nowrap;
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: 600;
+  order: 2;
 }
-.trump-status.open .ts-state { color: var(--gold); }
-.trump-status.closed .ts-state { color: var(--cream-dim); }
+.room-code.small {
+  font-size: 13px;
+  letter-spacing: 1.5px;
+  white-space: nowrap;
+  order: 1;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+}
+
+/* v2.2.15: trump dial — a persistent graphical medallion in the center
+ * of the header. Content is "?" pre-reveal, the suit glyph post-reveal.
+ * No OPEN/CLOSED text; the presence of a suit IS the reveal. */
+.trump-dial {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255,255,255,0.18), transparent 60%),
+    linear-gradient(180deg, #1f1a10 0%, #0b0905 100%);
+  border: 2px solid var(--gold);
+  box-shadow:
+    0 0 0 3px rgba(230, 200, 106, 0.18),
+    0 2px 8px rgba(0, 0, 0, 0.55),
+    inset 0 1px 2px rgba(255,255,255,0.08);
+  transition: border-color 280ms ease, box-shadow 280ms ease, background 280ms ease;
+  z-index: 2;
+}
+.trump-dial .trump-dial-inner {
+  font-size: 20px;
+  line-height: 1;
+  font-family: "Georgia", "Times New Roman", serif;
+  font-weight: 700;
+  color: var(--cream);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}
+.trump-dial.unknown .trump-dial-inner,
+.trump-dial.closed  .trump-dial-inner {
+  color: var(--cream-dim);
+  font-size: 18px;
+}
+.trump-dial.color-red .trump-dial-inner { color: var(--red); }
+.trump-dial.color-black .trump-dial-inner { color: var(--cream); }
+.trump-dial.open {
+  border-color: var(--gold);
+  box-shadow:
+    0 0 0 3px rgba(230, 200, 106, 0.35),
+    0 0 18px rgba(230, 200, 106, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.55);
+  background:
+    radial-gradient(circle at 30% 28%, rgba(255,255,255,0.28), transparent 55%),
+    linear-gradient(180deg, #f7f1df 0%, #d6caa5 100%);
+}
+.trump-dial.open.color-red  .trump-dial-inner { color: var(--red);   text-shadow: none; }
+.trump-dial.open.color-black .trump-dial-inner { color: var(--black); text-shadow: none; }
+.trump-dial.maker-only {
+  /* Maker-only (still closed to the rest of the table): show the suit
+   * but keep the dark medallion background so it reads as a privileged
+   * peek rather than a public reveal. */
+  border-color: rgba(230, 200, 106, 0.75);
+}
+.trump-dial.maker-only.color-red  .trump-dial-inner { color: #ff7f7a; }
+.trump-dial.maker-only.color-black .trump-dial-inner { color: var(--cream); }
 
 .phase-banner {
   text-align: center;
@@ -787,18 +843,42 @@ button { cursor: pointer; }
 .seat-right { grid-column: 3; grid-row: 1 / span 2; justify-self: end; align-self: stretch; max-height: 100%; }
 .seat-bottom { flex-shrink: 0; }
 
+/* v2.2.15: player-name and bid labels are decorated pills in the play
+ * area. Dark felt-glass background, thin gold-tinted border, tabular
+ * padding, and a soft glow when the seat is the current actor. Keeps
+ * the names readable without looking like naked text on the felt. */
 .seat-name {
-  font-size: 12px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
   color: var(--cream-dim);
-  margin-bottom: 4px;
+  margin-bottom: 5px;
+  padding: 3px 10px;
   text-align: center;
-  max-width: 110px;
+  max-width: 118px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.3) 100%);
+  border: 1px solid rgba(230, 200, 106, 0.22);
+  border-radius: 999px;
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  transition: border-color 180ms ease, box-shadow 180ms ease, color 180ms ease;
 }
-.seat-name.active { color: var(--gold); font-weight: 700; }
-.seat-name.you { color: var(--gold); }
+.seat-name.active {
+  color: var(--gold);
+  font-weight: 700;
+  border-color: var(--gold);
+  box-shadow:
+    0 0 0 2px rgba(230, 200, 106, 0.2),
+    0 2px 6px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.seat-name.you { color: var(--gold); border-color: rgba(230, 200, 106, 0.45); }
+.seat-name.you.active { color: var(--gold); }
 
 .seat-cards {
   display: flex;
@@ -821,16 +901,45 @@ button { cursor: pointer; }
 .seat-cards.vertical .card { margin-left: 0; margin-top: -28px; }
 .seat-cards.vertical .card:first-child { margin-top: 0; }
 
+/* v2.2.15: seat-bid rendered as a tinted pill when there's content;
+ * empty .seat-bid is collapsed (no stray outline / empty pill).
+ * "pass" renders in a muted pill; numeric bids in a gold-accented pill. */
 .seat-bid {
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--gold);
-  min-height: 14px;
+  margin-top: 5px;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  font-weight: 600;
+  color: var(--cream);
   text-align: center;
-  max-width: 110px;
+  max-width: 118px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-height: 0;
+}
+.seat-bid:empty { display: none; }
+.seat-bid:not(:empty) {
+  display: inline-block;
+  padding: 2px 9px;
+  text-transform: uppercase;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.2));
+  border: 1px solid rgba(230, 200, 106, 0.25);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.35);
+}
+.seat-bid.kind-pass:not(:empty) {
+  color: var(--cream-dim);
+  border-color: rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.15));
+}
+.seat-bid.kind-ask:not(:empty) {
+  color: #e8d7a8;
+  border-color: rgba(230, 200, 106, 0.4);
+}
+.seat-bid.kind-bid:not(:empty) {
+  color: var(--gold);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(230,200,106,0.15), 0 1px 2px rgba(0,0,0,0.4);
 }
 
 /* ============ Trick center ============ */

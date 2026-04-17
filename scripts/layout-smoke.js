@@ -89,14 +89,14 @@ assert(
 const html = read('public/index.html');
 assert(/id="your-hand"/.test(html), 'index.html has the player hand slot (v2.2.10 also hosts the inline indicator)');
 assert(/id="phase-banner"/.test(html), 'index.html has the phase banner');
-assert(/v=2\.2\.14/.test(html), 'index.html uses semver cache-bust marker (v2.2.14)');
+assert(/v=2\.2\.15/.test(html), 'index.html uses semver cache-bust marker (v2.2.15)');
 assert(/id="bid-strip"/.test(html), 'index.html has the bid-strip element');
 
 // -- Client behavior checks (parse client.js for the expected hooks) -------
 const client = read('public/client.js');
 assert(
-  /BUILD\s*=\s*'2\.2\.14'/.test(client),
-  'client.js declares BUILD = "2.2.14" (semver, not codename)',
+  /BUILD\s*=\s*'2\.2\.15'/.test(client),
+  'client.js declares BUILD = "2.2.15" (semver, not codename)',
 );
 assert(
   /isTappable\s*=\s*legalIds\.has\(indicatorCard\.id\)/.test(client),
@@ -174,8 +174,8 @@ assert(
   'client.js gates bid/pass chips on isBiddingPhase (defensive; v2.2.3)',
 );
 assert(
-  /if \(!isBiddingPhase\) return ''/.test(client),
-  'client.js bidLabelFor returns empty outside bidding phases (no stale per-seat labels)',
+  /if \(!isBiddingPhase\) return \{ text: '', kind: null \}/.test(client),
+  'client.js bidLabelFor returns empty (kinded) outside bidding phases (v2.2.15)',
 );
 assert(
   !/placeholder\s*=\s*['"]custom['"]/.test(client),

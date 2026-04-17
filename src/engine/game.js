@@ -176,12 +176,25 @@ function bidAmountsLegal(state, seat) {
 }
 
 function bid8AmountsLegal(state, seat) {
-  if (partnerIsHighBidder(state, seat)) return [];
+  if (partnerLockoutBid8(state, seat)) return [];
   const lower = Math.max(250, state.highBid ? state.highBid.amount + 10 : 250);
   const upper = 300;
   const out = [];
   for (let a = lower; a <= upper; a += 10) out.push(a);
   return out;
+}
+
+// v2.2.15: partner-lockout in the 8-card round is softer than in bid4.
+// Your partner's bid4 win (160–240) leaves you free to escalate into
+// the 8-card range — you can still outbid them with 250+. Only lock
+// yourself out if your partner has ALREADY committed to the 8-card
+// stake level (bid ≥ 250). Encodes the user rule:
+//   "I should be able to bid for 8 cards even if … my partner holds
+//    the current bid from 4-card betting (unless partner is a 250+
+//    current bid)."
+function partnerLockoutBid8(state, seat) {
+  if (!partnerIsHighBidder(state, seat)) return false;
+  return state.highBid && state.highBid.amount >= 250;
 }
 
 function applyAction(state, seat, action) {
@@ -399,8 +412,10 @@ function handleBid8(state, seat, action) {
     // high bidder (typically the trump maker entering the round) has no
     // self-raise path — they can only pass, or wait to be outbid.
     if (state.highBid && state.highBid.bidder === seat) return fail('you are already the high bidder');
-    // House rule (v2.2.7): cannot bid over your partner, full stop.
-    if (partnerIsHighBidder(state, seat)) return fail('cannot bid over your partner');
+    // v2.2.15: soft partner-lockout in bid8 — blocks only if partner's
+    // current bid is already 250+. Below 250 you may escalate over
+    // your partner into the 8-card range.
+    if (partnerLockoutBid8(state, seat)) return fail('cannot bid over your partner once they commit to 250+');
     if (state.highBid && amount <= state.highBid.amount) return fail('must exceed current high bid');
     // v2.2.11: one turn per seat in bid8. A seat that acted once
     // (pass or bid) cannot act again — "higher bid wins going in
@@ -411,15 +426,19 @@ function handleBid8(state, seat, action) {
 
     const newMaker = seat;
     if (newMaker !== state.trumpMaker) {
-      // v2.2.11: auto-pass the new bidder's partner for the 8-card
-      // round too — they can't bid over their own partner. Matches
-      // bid4 partner-lockout symmetry.
-      const newPartner = partnerOf(seat);
-      if (state.seats[newPartner] && !state.bid8Acted[newPartner]) {
-        state.bid8Acted[newPartner] = true;
-        state.bid8Turns += 1;
-        state.bids.push({ seat: newPartner, type: 'autoPass', reason: 'partner-high', round: 8 });
-        log(state, `${state.seats[newPartner].name} auto-passed in 8-card round (partner is high bidder).`);
+      // v2.2.15: soft partner-lockout — only auto-pass the new bidder's
+      // partner if the bidder is at 250+ already (which they always are
+      // here, since this branch fires on a bid8 outbid of a bid4 win
+      // where the minimum is 250). Kept for clarity + symmetry with
+      // partnerLockoutBid8.
+      if (amount >= 250) {
+        const newPartner = partnerOf(seat);
+        if (state.seats[newPartner] && !state.bid8Acted[newPartner]) {
+          state.bid8Acted[newPartner] = true;
+          state.bid8Turns += 1;
+          state.bids.push({ seat: newPartner, type: 'autoPass', reason: 'partner-high', round: 8 });
+          log(state, `${state.seats[newPartner].name} auto-passed in 8-card round (partner is high bidder at ≥ 250).`);
+        }
       }
       state.hands[state.trumpMaker].push(state.trumpIndicator);
       state.trumpIndicator = null;
@@ -459,7 +478,8 @@ function advanceBid8(state) {
   for (let i = 0; i < 4; i++) {
     if (!state.bid8Acted[p] && state.seats[p]) {
       const isHighBidder = state.highBid && state.highBid.bidder === p;
-      const partnerLocked = partnerIsHighBidder(state, p);
+      // v2.2.15: soft partner-lockout in bid8 (only ≥250 blocks).
+      const partnerLocked = partnerLockoutBid8(state, p);
       if (isHighBidder || partnerLocked) {
         // Auto-pass locked seats so they don't consume a real turn.
         state.bid8Acted[p] = true;
