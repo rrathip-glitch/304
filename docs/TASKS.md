@@ -5,11 +5,14 @@
 
 ## Where we are
 
-**v2.2.6 is live on Railway.** Engine is feature-complete for the
-household variant. UI is responsive across iPhone SE → iPad mini.
-Multiplayer survives reconnects, closed tabs, and idle rooms. All
-seven test scripts green (45 + 31 + 34 + 16 boundary + 3 match + 5 soak
-+ 4 e2e assertions).
+**v2.2.10 is live on Railway.** Engine is feature-complete for the
+household variant and now ends hands + rounds the moment their
+outcome is decided. UI is responsive across iPhone SE → iPad mini,
+with a full flash suite narrating every meaningful event (bid settled,
+trump revealed, trick won, hand won, match won). Multiplayer survives
+reconnects, closed tabs, and idle rooms. All seven test scripts
+green (71 layout + ~80 bid + 34 cut + 16 boundary + smoke + soak
++ e2e).
 
 ```
 Watched branch: claude/mobile-game-development-GifG7    (Railway auto-deploys)
@@ -71,6 +74,36 @@ history.
 - [x] Maker face-down = non-trump disposal OR indicator only.
 - [x] Custom-bid free-form input removed; every legal amount is a chip.
 
+### Early bid + hand resolution + full flash suite (v2.2.10, 2026-04-17)
+- [x] Partner auto-pass on bid (v2.2.7 lockout + bid4 rotation skip).
+- [x] Pass = locked out for bid4 — explicit engine reject path.
+- [x] Early-finalize of hand when outcome is mathematically decided
+      (defenders clinch OR maker clinched partial; all-8 still kept alive).
+- [x] View exposes `trickPoints` for hand-won flash detail.
+- [x] Bid-settled flash (bid4 → trump_pick1).
+- [x] Hand-won flash (4 s) with caller + bid + per-team points.
+- [x] Match-won flash (4.5 s) when a team reaches 22.
+- [x] Tests + docs updated (bid-test early-finalize + partner auto-pass
+      coverage; RULES + DECISIONS + README refreshed).
+
+### Indicator inlined + UI strip de-duplication (v2.2.9, 2026-04-17)
+- [x] Indicator rendered inline in the maker's hand row with a badge
+      + gold ring + flip animation.
+- [x] Bid strip trimmed (no more trump/open text — header pill has it).
+- [x] Indicator-strip banner removed.
+- [x] Trick seat-name tags removed (position + corners are enough).
+- [x] .your-trump DOM/CSS removed.
+
+### Hand-row clip (round two) + flashes (v2.2.8, 2026-04-17)
+- [x] Trick-card max-height + aspect-ratio safety; indicator-strip
+      compacted to reclaim play-area vertical.
+- [x] Trump-reveal flash + trick-won flash.
+
+### Partner-bid lockout + indicator visuals (v2.2.7, 2026-04-17)
+- [x] Partners cannot bid over each other (hard lockout, both rounds).
+- [x] Trump-indicator state widget (closed / in-hand / played).
+- [x] Cut log names the cutter.
+
 ### Engine quality pass + trump pill + hand clip (v2.2.6, 2026-04-17)
 - [x] Dead state cleanup (`closeCaps`, `dealtFirstBatch`, `bid8Passes`,
       `highBid.isCloseCaps`).
@@ -104,16 +137,16 @@ history.
 Run from the repo root (~10 s total):
 
 ```bash
-node scripts/layout-smoke.js   # 45 structural assertions
+node scripts/layout-smoke.js   # 71 structural assertions
 node scripts/cut-test.js       # 34 engine assertions (4 scenarios)
-node scripts/bid-test.js       # 58 engine assertions (8 scenarios)
+node scripts/bid-test.js       # ~80 engine assertions (12 scenarios)
 node scripts/robust-test.js    # 16 boundary + live-boot assertions
 node scripts/smoke.js          # one full 4-AI match
 node scripts/soak.js 5         # 5 matches; token invariant
 node scripts/e2e.js            # boots server, drives socket
 ```
 
-All seven passing as of v2.2.6.
+All seven passing as of v2.2.10.
 
 ## Release procedure
 

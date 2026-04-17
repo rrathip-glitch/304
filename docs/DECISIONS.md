@@ -32,6 +32,14 @@ of the decision's scope. Chronological order within each bracket.
 | v2.2.5 | House rule | Maker face-down = disposal or indicator only |
 | v2.2.5 | UX | Remove custom-bid free-form input |
 | v2.2.6 | Quality | Engine quality pass; hand-clip fix; trump-status pill |
+| v2.2.7 | House rule | Partners cannot bid over each other at all |
+| v2.2.7 | UX | Trump-indicator status widget + clearer cut log |
+| v2.2.8 | UX | Trump-reveal + trick-won flash overlays |
+| v2.2.8 | Layout | Trick-card bottom-clip fix (round two) |
+| v2.2.9 | UX | Indicator inlined into maker's hand; drop redundant strips + seat tags |
+| v2.2.10 | House rule | Partner auto-pass + passed-seat lockout in bid4 |
+| v2.2.10 | Engine | Early-finalize when hand outcome is decided |
+| v2.2.10 | UX | Bid-settled + hand-won + match-won flash overlays |
 
 ---
 
@@ -591,6 +599,74 @@ pairs well with the cut-prompt already in the phase banner.
 
 **Tests:** all seven green after the merge (layout-smoke +4 checks for
 v2.2.5 rules + trump pill; cut-test unchanged; bid-test unchanged).
+
+---
+
+---
+
+## 2026-04-17 — Early bid + early hand resolution; hand-won flash — v2.2.10
+
+**Four interlocking changes, all driven by the same principle: don't
+drag out a round whose outcome is already decided. Show the outcome
+clearly the moment it's locked in.**
+
+### 1. Partner auto-pass in bid4
+
+When a bid lands, the bidder's partner is immediately added to
+`passedSeats` (v2.2.7 rule: partner can't bid over you). Previously
+the partner had to be given a turn and explicitly pass even though
+their only legal action was pass. Rotation now skips them entirely.
+
+### 2. Passed-seat lockout
+
+Once a seat passes in bid4 they cannot bid again. This was
+effectively enforced via the `currentBidder` gate, but v2.2.10 adds
+an explicit engine check that rejects a bid from a passed seat with
+`"you have already passed this round"`. Belt-and-suspenders against
+a malicious or buggy client bypassing the rotation.
+
+### 3. Early-finalize of a hand
+
+`resolveTrick` now calls `checkEarlyFinalize(state)` after updating
+points + before requiring 8 tricks played. The hand ends as soon as:
+- the defenders have clinched (maker can't reach the bid even with
+  all remaining points), OR
+- the maker has met the bid AND defenders have won ≥ 1 trick (so the
+  all-8 bonus is off the table).
+
+If the maker has met the bid AND hasn't lost a trick, play continues
+— they could still upgrade to the 5-token high-court bonus.
+
+### 4. Four new flash overlays
+
+The client now fires centred transient banners on the same transitions
+the engine surfaces:
+- **Bid won** (2.4 s) — bid4 → trump_pick1. Shows caller + display bid.
+- **Trump is …** (2.0 s) — first view where `isOpenTrump /
+  trumpRevealed` flips to true. Big suit glyph on a cream disc.
+- **Trick won / lost** (1.3 s) — `tricksPlayed` increments.
+- **Hand won / lost** (4.0 s) — `tokens` changes. Shows token delta
+  + caller + bid + per-team display points (`US 18.5 · THEM 11.9`).
+  Exposed a new `trickPoints` field on the view to drive this.
+- **Match won / lost** (4.5 s) — a team reaches 22 tokens. Takes
+  precedence over the hand flash on the same frame.
+
+Flashes are pointer-events: none (never block taps), stack ordering
+is match > hand > trick, and baselines are set on the first view so
+reconnects don't fire spurious flashes.
+
+### 5. Inline indicator card + docs pass (v2.2.9 residuals)
+
+Rolled in from the v2.2.9 ship: the indicator is now part of the
+maker's hand row (labeled + gold ring + flip animation), and the
+old `#indicator-strip` + `#your-trump` + trick seat-name tags are
+all gone. Bid strip no longer duplicates trump suit/open (it's on
+the header pill).
+
+**Tests:** bid-test gains early-finalize coverage + updated Test 3
+(walks rotation adaptively post-auto-pass); layout-smoke grows
+from 59 → 71 assertions covering the new engine logs, view field,
+flash variants, and CSS.
 
 ---
 

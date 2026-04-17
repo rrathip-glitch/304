@@ -78,7 +78,7 @@ assert(
 );
 assert(
   /\.indicator-slot\s+\.card\.indicator-card/.test(css),
-  'styles.css styles the inline indicator card inside the hand (v2.2.9)',
+  'styles.css styles the inline indicator card inside the hand (v2.2.10)',
 );
 assert(
   /@media\s*\(max-height:\s*640px\)/.test(css),
@@ -87,20 +87,20 @@ assert(
 
 // -- HTML structure checks --------------------------------------------------
 const html = read('public/index.html');
-assert(/id="your-hand"/.test(html), 'index.html has the player hand slot (v2.2.9 also hosts the inline indicator)');
+assert(/id="your-hand"/.test(html), 'index.html has the player hand slot (v2.2.10 also hosts the inline indicator)');
 assert(/id="phase-banner"/.test(html), 'index.html has the phase banner');
-assert(/v=2\.2\.9/.test(html), 'index.html uses semver cache-bust marker (v2.2.9)');
+assert(/v=2\.2\.10/.test(html), 'index.html uses semver cache-bust marker (v2.2.10)');
 assert(/id="bid-strip"/.test(html), 'index.html has the bid-strip element');
 
 // -- Client behavior checks (parse client.js for the expected hooks) -------
 const client = read('public/client.js');
 assert(
-  /BUILD\s*=\s*'2\.2\.9'/.test(client),
-  'client.js declares BUILD = "2.2.9" (semver, not codename)',
+  /BUILD\s*=\s*'2\.2\.10'/.test(client),
+  'client.js declares BUILD = "2.2.10" (semver, not codename)',
 );
 assert(
   /isTappable\s*=\s*legalIds\.has\(indicatorCard\.id\)/.test(client),
-  'client.js makes the inline indicator card tappable when its id is legal (v2.2.9)',
+  'client.js makes the inline indicator card tappable when its id is legal (v2.2.10)',
 );
 assert(
   /makerPeek/.test(client),
@@ -191,63 +191,111 @@ assert(
 );
 assert(
   /cannot bid over your partner/.test(game),
-  'game.js rejects partner-overbid in both bid4 and bid8 (v2.2.9)',
+  'game.js rejects partner-overbid in both bid4 and bid8 (v2.2.10)',
 );
 assert(
   /indicatorLocation/.test(game),
-  'game.js exposes indicatorLocation on the view (v2.2.9)',
+  'game.js exposes indicatorLocation on the view (v2.2.10)',
 );
 assert(
   !/id="indicator-strip"/.test(html),
-  'v2.2.9 removed the standalone indicator-strip element',
+  'v2.2.10 removed the standalone indicator-strip element',
 );
 assert(
   !/id="your-trump"/.test(html),
-  'v2.2.9 removed the standalone your-trump row',
+  'v2.2.10 removed the standalone your-trump row',
 );
 assert(
   /indicator-slot/.test(client),
-  'client.js renders the inline indicator slot in the hand (v2.2.9)',
+  'client.js renders the inline indicator slot in the hand (v2.2.10)',
 );
 assert(
   /\.indicator-slot/.test(css) && /\.indicator-badge/.test(css),
-  'styles.css defines the inline indicator slot + badge (v2.2.9)',
+  'styles.css defines the inline indicator slot + badge (v2.2.10)',
 );
 assert(
   /@keyframes\s+indicatorFlip/.test(css),
-  'styles.css has the indicator flip animation (v2.2.9)',
+  'styles.css has the indicator flip animation (v2.2.10)',
 );
 assert(
   !/className\s*=\s*['"]seat-tag['"]/.test(client),
-  'client.js no longer renders seat-name tags above trick cards (v2.2.9)',
+  'client.js no longer renders seat-name tags above trick cards (v2.2.10)',
 );
 assert(
   !/bid-strip-trump/.test(client),
-  'client.js no longer appends the "· trump … · open" tail to the bid strip (v2.2.9)',
+  'client.js no longer appends the "· trump … · open" tail to the bid strip (v2.2.10)',
 );
 assert(
   /\.trick-card[^}]*max-height:\s*100%/s.test(css),
-  '.trick-card caps at cell height so cards never clip on short screens (v2.2.9)',
+  '.trick-card caps at cell height so cards never clip on short screens (v2.2.10)',
 );
 assert(
   /\.trick-card\s+\.card[^}]*aspect-ratio:\s*1\s*\/\s*1\.4/s.test(css),
-  'trick-card .card has aspect-ratio 1/1.4 for safe downscaling (v2.2.9)',
+  'trick-card .card has aspect-ratio 1/1.4 for safe downscaling (v2.2.10)',
 );
 assert(
   /id="flash-overlay"/.test(html),
-  'index.html has the flash-overlay element (v2.2.9)',
+  'index.html has the flash-overlay element (v2.2.10)',
 );
 assert(
   /\.flash-overlay/.test(css),
-  'styles.css defines the flash-overlay (v2.2.9)',
+  'styles.css defines the flash-overlay (v2.2.10)',
 );
 assert(
   /function showFlash/.test(client),
-  'client.js has a showFlash helper (v2.2.9)',
+  'client.js has a showFlash helper (v2.2.10)',
 );
 assert(
   /maybeFlashEvents/.test(client),
-  'client.js detects trump-reveal + trick-won transitions (v2.2.9)',
+  'client.js detects trump-reveal + trick-won transitions (v2.2.10)',
+);
+assert(
+  /kind:\s*'hand'/.test(client),
+  'client.js emits a hand-won flash with tokens delta (v2.2.10)',
+);
+assert(
+  /kind:\s*'match'/.test(client),
+  'client.js emits a match-won flash when a team reaches 22 (v2.2.10)',
+);
+assert(
+  /\.flash-overlay\.hand-us/.test(css) && /\.flash-overlay\.hand-them/.test(css),
+  'styles.css defines hand-won flash variants (v2.2.10)',
+);
+assert(
+  /\.flash-tokens/.test(css),
+  'styles.css defines the hand-flash token-delta styling (v2.2.10)',
+);
+assert(
+  /function checkEarlyFinalize/.test(game),
+  'game.js defines checkEarlyFinalize for the early-finalize path (v2.2.10)',
+);
+assert(
+  /Hand decided — defenders denied/.test(game),
+  'game.js logs the defenders-clinch early-finalize reason (v2.2.10)',
+);
+assert(
+  /Hand decided — maker reached the bid/.test(game),
+  'game.js logs the maker-clinched early-finalize reason (v2.2.10)',
+);
+assert(
+  /you have already passed this round/.test(game),
+  'game.js rejects re-bids from passed seats (v2.2.10)',
+);
+assert(
+  /auto-passed \(partner is high bidder\)/.test(game),
+  'game.js auto-passes the partner of the high bidder in bid4 (v2.2.10)',
+);
+assert(
+  /trickPoints:\s*state\.trickPoints\.slice\(\)/.test(game),
+  'view exposes trickPoints for the hand-won flash detail (v2.2.10)',
+);
+assert(
+  /kind:\s*'bid'/.test(client),
+  'client.js emits a bid-settled flash at trump_pick1 (v2.2.10)',
+);
+assert(
+  /\.flash-overlay\.bid-us/.test(css),
+  'styles.css defines the bid-settled flash variant (v2.2.10)',
 );
 
 // -- AI behavior check ------------------------------------------------------

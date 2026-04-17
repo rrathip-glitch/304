@@ -221,6 +221,11 @@ function handleBid4(state, seat, action) {
     const amount = action.amount | 0;
     if (amount % 10 !== 0) return fail('bids must be multiples of 10');
     if (amount < 160) return fail('minimum bid is 160');
+    // House rule (v2.2.10): once a seat has passed in bid4 they are
+    // locked out for the rest of this round — no reviving on a later
+    // rotation. advanceBid4 already skips them as currentBidder; this
+    // is the belt-and-suspenders reject if a client tries to bypass.
+    if (state.passedSeats.includes(seat)) return fail('you have already passed this round');
     // House rule (v2.1.0): you cannot bid over yourself.
     if (state.highBid && state.highBid.bidder === seat) return fail('you are already the high bidder');
     // House rule (v2.2.1): once you've asked your partner to bid, you've
@@ -270,6 +275,20 @@ function handleBid4(state, seat, action) {
 }
 
 function advanceBid4(state) {
+  // House rule (v2.2.10): partners cannot bid over each other. Combined
+  // with the per-seat lockouts (`isAsker`, self-high-bidder), a seat
+  // whose ONLY legal action is pass has no information to add. Fold
+  // such seats into passedSeats eagerly so the round resolves at the
+  // earliest mathematically-justified point.
+  if (state.highBid) {
+    const partnerSeat = partnerOf(state.highBid.bidder);
+    if (!state.passedSeats.includes(partnerSeat) && state.seats[partnerSeat]) {
+      state.passedSeats.push(partnerSeat);
+      state.bids.push({ seat: partnerSeat, type: 'autoPass', reason: 'partner-high' });
+      log(state, `${state.seats[partnerSeat].name} auto-passed (partner is high bidder).`);
+    }
+  }
+
   const activeBidders = [0, 1, 2, 3].filter((s) => !state.passedSeats.includes(s));
   // If a high bid exists and no other active bidders could raise, the bid wins.
   if (state.highBid) {
@@ -576,7 +595,14 @@ function resolveTrick(state) {
     log(state, `Bid ≥25 auto-opens trump. Trump is ${state.trumpSuit}.`);
   }
 
-  if (state.tricksPlayed >= 8) {
+  // Early-finalize (v2.2.10): end the hand as soon as the outcome is
+  // mathematically decided, so already-won games aren't dragged out.
+  //   • defenders clinch  — maker can't reach the bid even if they
+  //     take every remaining point.
+  //   • maker clinched    — maker has met the bid AND all-8 is off
+  //     the table (defenders have already won at least one trick),
+  //     so further play can't upgrade the token scale.
+  if (state.tricksPlayed >= 8 || checkEarlyFinalize(state)) {
     state.phase = PHASES.HAND_END;
     state.currentPlayer = null;
     return finalizeHand(state);
@@ -586,6 +612,37 @@ function resolveTrick(state) {
   state.currentPlayer = winnerSeat;
   state.phase = PHASES.INSPECT;
   return { ok: true };
+}
+
+// True when the hand's token outcome is already determined and any
+// remaining tricks can't change it. Both branches are strict: a maker
+// with a shot at the all-8 "high court" bonus (no lost trick yet) is
+// NEVER short-circuited even if the bid is met — they might still
+// upgrade to +5 tokens.
+function checkEarlyFinalize(state) {
+  if (!state.highBid || state.trumpMaker == null) return false;
+  const makerTeam = teamOf(state.trumpMaker);
+  const defenderTeam = 1 - makerTeam;
+  const makerPts = state.trickPoints[makerTeam];
+  const defenderPts = state.trickPoints[defenderTeam];
+  const remaining = cards.TOTAL_POINTS - makerPts - defenderPts;
+  const bidAmt = state.highBid.amount;
+
+  // Defenders clinch: even if the maker wins every remaining point
+  // they can't reach the bid. Ties go to the bidder, so strict "<".
+  if (makerPts + remaining < bidAmt) {
+    log(state, `Hand decided — defenders denied the bid of ${bidAmt / 10} (maker has ${cards.displayPoints(makerPts)}, can reach at most ${cards.displayPoints(makerPts + remaining)}).`);
+    return true;
+  }
+
+  // Maker clinched on partial win: bid is met, and all-8 is gone
+  // (defenders already own at least one trick).
+  if (makerPts >= bidAmt && state.tricksWon[defenderTeam] > 0) {
+    log(state, `Hand decided — maker reached the bid of ${bidAmt / 10} (has ${cards.displayPoints(makerPts)}); all-8 no longer possible.`);
+    return true;
+  }
+
+  return false;
 }
 
 function handleInspect(state, seat, action) {
@@ -867,6 +924,10 @@ function viewFor(state, seat) {
     trumpRevealed: state.trumpRevealed,
     trickLeader: state.trickLeader,
     tricksWon: state.tricksWon.slice(),
+    // Per-team internal trick points (×10; divide by 10 for display).
+    // Exposed v2.2.10 so the hand-won flash can show the exact total
+    // each team brought home.
+    trickPoints: state.trickPoints.slice(),
     tricksPlayed: state.tricksPlayed,
     currentTrick: state.currentTrick.map((p) => {
       // Visibility rules (v2.2.4):

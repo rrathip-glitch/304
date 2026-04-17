@@ -1,6 +1,6 @@
 # 304 — Mobile Multiplayer Card Game
 
-[![version](https://img.shields.io/badge/version-2.2.9-blue.svg)](#release-notes)
+[![version](https://img.shields.io/badge/version-2.2.10-blue.svg)](#release-notes)
 
 A web-based implementation of **304**, a Sri Lankan trick-taking card game.
 Built mobile-first for seamless play between two humans (e.g. you and your
@@ -34,6 +34,30 @@ Any empty seats are filled by the AI.
 Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Release Notes
+
+### v2.2.10 — 2026-04-17
+
+- **Early bid resolution.** When a bid lands, the bidder's partner is
+  auto-passed (v2.2.7 already forbade them from bidding over each
+  other); rotation skips their turn so bid4 resolves at the earliest
+  point. Once a seat passes in bid4 they're locked out for the rest
+  of the round — `"you have already passed this round"` is the reject
+  if anything tries to revive them.
+- **Early hand resolution.** A hand now ends the moment its outcome
+  is mathematically decided: when defenders have denied the bid, or
+  the maker has met it with no all-8 left. Play skips to `hand_end`
+  with the correct token math. The log records the trigger reason.
+- **Four new flash overlays** (centered, pointer-events off):
+    • **Bid won** (2.4 s) — bid4 → trump_pick1. "Caller · <bid>".
+    • **Hand won / lost** (4.0 s) — tokens change. Shows "+N tokens"
+      in big type plus a detail line with caller, bid size, and
+      per-team display points (e.g. "US 18.5 · THEM 11.9").
+    • **Match won / lost** (4.5 s) — a team reaches 22 tokens. Takes
+      precedence over the hand flash on the same frame.
+    • The existing Trump-reveal and Trick-won flashes round out the set.
+- **New view field `trickPoints`** — `[team0, team1]` in internal
+  units — lets the hand-won flash surface the exact totals each team
+  brought home.
 
 ### v2.2.9 — 2026-04-17
 

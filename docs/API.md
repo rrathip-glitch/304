@@ -87,6 +87,8 @@ See `docs/ARCHITECTURE.md#client-view-filtering`. Key fields:
   per-seat (see *Cutting visibility* below)
 - `tokens`: `[team0, team1]`
 - `tricksWon`: per-team count
+- `trickPoints`: `[team0, team1]` internal point totals so far this hand
+  (divide by 10 for display). Added v2.2.10 for the hand-won flash.
 - `log`: recent events (last 10)
 - `cutResolved`: `true` for one frame after a face-down trump was revealed
   this trick. Cleared when the next trick begins. Drives the "CUT!" banner.
@@ -190,6 +192,8 @@ may see; group them by where they come from:
 | `"you are already the high bidder"` | bid4 / bid8 | No self-overbid (house rule v2.1.0). |
 | `"you asked partner to bid — you can only pass this round"` | bid4 | Asker lockout (house rule v2.2.1). |
 | `"ask-partner already used this round"` | bid4 | Once per round (house rule v2.2.3). |
+| `"cannot bid over your partner"` | bid4 / bid8 | Partner-is-high lockout (house rule v2.2.7). |
+| `"you have already passed this round"` | bid4 | Pass lockout (house rule v2.2.10). |
 | `"only the first bidder may demand redeal"` / `"hand too strong for redeal"` / `"redeal only on first action"` | bid4 | Redeal gating. |
 | `"minimum 8-card bid is 250"` / `"cannot bid after partner"` | bid8 | |
 | `"only trump maker picks"` / `"card not in hand"` | trump_pick1/2 | |

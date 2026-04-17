@@ -121,6 +121,17 @@ scoring) uses the internal value unchanged.
 - **Auto-resolution**: if you bid and every other active player passes,
   the bid stands and the engine advances to trump pick automatically —
   no further confirmation needed.
+- **Partner auto-pass** *(house rule, v2.2.10)*: the moment a bid
+  lands, the bidder's **partner is auto-passed** (they can't bid
+  over their partner anyway). Rotation skips their pseudo-turn so
+  the round resolves at the earliest mathematically-justified point.
+  The log records this as `"<partner> auto-passed (partner is high
+  bidder)."`.
+- **Pass = locked out** *(house rule, v2.2.10)*: once you pass in the
+  4-card round, you cannot bid again in bid4. Even if you become the
+  current bidder via some edge case, the engine rejects the bid with
+  `"you have already passed this round"`. You get a fresh slate in
+  the 8-card round.
 - **Second-turn <200 restriction**: if you have already bid or passed once,
   you may not bid <200 on your next turn (you may still pass).
 - **Partner-is-high restriction** *(house rule; tightened in v2.2.7)*:
@@ -300,6 +311,27 @@ forced).
   in cards each team won in tricks. Total across all tricks = 304.
 - If the trump maker's team's points **≥ bid**, they succeed. Ties go to
   the trump maker.
+
+### Early hand finalization *(v2.2.10)*
+
+The engine ends a hand the moment the outcome is mathematically decided
+— there's no value in playing out the remaining tricks:
+
+1. **Defenders clinch.** If the maker's current points plus ALL the
+   remaining points still cannot reach the bid, the defenders have won.
+   The hand ends and tokens transfer per the table below.
+2. **Maker clinches partial.** If the maker has met the bid AND the
+   defenders have already won at least one trick (so the all-8 "high
+   court" bonus is off the table), the hand ends with the maker's
+   normal token win.
+3. **Maker still has all-8 in play.** If the maker has met the bid
+   and hasn't lost a trick yet, play continues — they might still
+   upgrade to 5 tokens via all-8.
+
+The `log` records the reason (`"Hand decided — defenders denied the
+bid …"` / `"Hand decided — maker reached the bid …"`). The client
+fires a hand-won flash showing the token delta, caller, bid, and
+per-team display points.
 
 ## Scoring (Tokens)
 

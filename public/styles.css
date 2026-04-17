@@ -249,6 +249,93 @@ button { cursor: pointer; }
   color: var(--cream);
 }
 
+/* Hand-won / Match-won variants (v2.2.10) — bigger and longer-lived.
+ * The token delta is the headline; the team colour keys off us/them. */
+.flash-overlay.hand-us .flash-card,
+.flash-overlay.match-us .flash-card {
+  background: linear-gradient(180deg, #1f7f4f 0%, #0a3c22 100%);
+  border-color: var(--gold);
+  padding: 28px 44px;
+}
+.flash-overlay.hand-them .flash-card,
+.flash-overlay.match-them .flash-card {
+  background: linear-gradient(180deg, #7f1f22 0%, #3d0e10 100%);
+  border-color: #c89fa0;
+  padding: 28px 44px;
+}
+.flash-overlay.hand-us .flash-heading,
+.flash-overlay.hand-them .flash-heading,
+.flash-overlay.match-us .flash-heading,
+.flash-overlay.match-them .flash-heading {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--cream-dim);
+  margin-bottom: 8px;
+}
+.flash-overlay.hand-us .flash-tokens,
+.flash-overlay.hand-them .flash-tokens {
+  display: block;
+  font-size: 42px;
+  line-height: 1;
+  letter-spacing: 3px;
+  color: var(--gold);
+  margin: 2px 0;
+}
+.flash-overlay.hand-them .flash-tokens { color: #f2d5d7; }
+.flash-overlay.hand-us .flash-detail,
+.flash-overlay.hand-them .flash-detail {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--cream-dim);
+  font-weight: 500;
+  text-transform: none;
+}
+.flash-overlay.match-us .flash-text,
+.flash-overlay.match-them .flash-text {
+  display: block;
+  font-size: 36px;
+  letter-spacing: 5px;
+  color: var(--cream);
+}
+.flash-overlay.match-us .flash-card { box-shadow: 0 0 0 3px var(--gold), 0 18px 44px rgba(0,0,0,0.7); }
+.flash-overlay.match-them .flash-card { box-shadow: 0 0 0 3px #c89fa0, 0 18px 44px rgba(0,0,0,0.7); }
+
+/* Bid-settled variant (v2.2.10) — fires when bid4 resolves. */
+.flash-overlay.bid-us .flash-card,
+.flash-overlay.bid-them .flash-card {
+  background: linear-gradient(180deg, #1a4a60 0%, #0a2434 100%);
+  border-color: var(--gold);
+}
+.flash-overlay.bid-us .flash-heading,
+.flash-overlay.bid-them .flash-heading {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: var(--cream-dim);
+  margin-bottom: 4px;
+}
+.flash-overlay.bid-us .flash-text,
+.flash-overlay.bid-them .flash-text {
+  display: block;
+  font-size: 26px;
+  letter-spacing: 3px;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+.flash-overlay.bid-us .flash-detail,
+.flash-overlay.bid-them .flash-detail {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--cream-dim);
+  text-transform: none;
+}
+.flash-overlay.bid-us .flash-text { color: var(--gold); }
+.flash-overlay.bid-them .flash-text { color: #f2d5d7; }
+
 .conn-banner {
   position: fixed;
   top: 0;

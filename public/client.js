@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.9';
+  const BUILD = '2.2.10';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -143,15 +143,20 @@
     game_over: 'Game over',
   };
 
-  // ---- Flash overlay (v2.2.8) ----------------------------------------------
-  // Shows a brief centered banner when a trump reveal or a trick-won
-  // transition is detected in a new view. Two timers:
-  //   • trump reveal → 2 000 ms
-  //   • trick won    → 1 300 ms
-  // Triggered from renderTable BEFORE state.view is swapped, so we can
-  // compare the incoming view against the tracked baselines below.
+  // ---- Flash overlay (v2.2.8+) ---------------------------------------------
+  // Shows a brief centered banner when a meaningful table event lands in
+  // the next view. Four kinds, detected by comparing the incoming view
+  // against the tracked baselines below:
+  //   • trump reveal → 2 000 ms, big suit glyph + "Trump is <name>"
+  //   • trick won    → 1 300 ms, "Won by us" / "Won by them"
+  //   • hand won     → 3 200 ms, "Hand won" / "Hand lost" + "+N tokens"
+  //                    (v2.2.10; detects tokens change between views)
+  //   • match won    → 4 000 ms, "Match won" / "Match lost" on a team
+  //                    reaching 22. Takes priority over the hand flash.
   let prevTrumpOpen = null;      // null = baseline not yet set
   let prevTricksPlayed = null;
+  let prevTokens = null;         // [t0, t1] | null
+  let prevPhase = null;
   let flashTimer = null;
   const SUIT_GLYPH = { S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' };
   const SUIT_FULL = { S: 'Spades', H: 'Hearts', D: 'Diamonds', C: 'Clubs' };
@@ -187,6 +192,58 @@
       text.className = 'flash-text';
       text.textContent = opts.us ? 'Won by us' : 'Won by them';
       card.appendChild(text);
+    } else if (opts.kind === 'hand') {
+      // Large hand-won banner with the token swing in big type, plus
+      // context rows: caller + bid + per-team displayed points.
+      el.classList.add(opts.us ? 'hand-us' : 'hand-them');
+      const heading = document.createElement('span');
+      heading.className = 'flash-heading';
+      heading.textContent = opts.us ? 'Hand won' : 'Hand lost';
+      card.appendChild(heading);
+      const tokens = document.createElement('span');
+      tokens.className = 'flash-tokens';
+      const sign = opts.us ? '+' : '−';
+      tokens.textContent = sign + opts.tokens + ' token' + (opts.tokens === 1 ? '' : 's');
+      card.appendChild(tokens);
+      if (opts.caller) {
+        const call = document.createElement('span');
+        call.className = 'flash-detail';
+        call.textContent = opts.caller + ' called ' + opts.bidDisplay;
+        card.appendChild(call);
+      }
+      if (opts.usPts != null && opts.themPts != null) {
+        const pts = document.createElement('span');
+        pts.className = 'flash-detail flash-detail-pts';
+        pts.textContent = 'US ' + opts.usPts + ' · THEM ' + opts.themPts;
+        card.appendChild(pts);
+      }
+    } else if (opts.kind === 'bid') {
+      // Betting-settled flash — fires when bid4 auto-resolves to a
+      // winning bid (either everyone else passed, or partner-lockout
+      // short-circuit). Shows caller + bid.
+      el.classList.add(opts.us ? 'bid-us' : 'bid-them');
+      const heading = document.createElement('span');
+      heading.className = 'flash-heading';
+      heading.textContent = 'Bid won';
+      card.appendChild(heading);
+      const text = document.createElement('span');
+      text.className = 'flash-text';
+      text.textContent = opts.caller + ' · ' + opts.bidDisplay;
+      card.appendChild(text);
+      const hint = document.createElement('span');
+      hint.className = 'flash-detail';
+      hint.textContent = opts.us ? 'your team calls trump' : 'they call trump';
+      card.appendChild(hint);
+    } else if (opts.kind === 'match') {
+      el.classList.add(opts.us ? 'match-us' : 'match-them');
+      const heading = document.createElement('span');
+      heading.className = 'flash-heading';
+      heading.textContent = 'Match';
+      card.appendChild(heading);
+      const text = document.createElement('span');
+      text.className = 'flash-text';
+      text.textContent = opts.us ? 'Won by us' : 'Won by them';
+      card.appendChild(text);
     }
     el.appendChild(card);
     el.classList.remove('hidden');
@@ -194,7 +251,12 @@
     // actually animates instead of being collapsed by the browser.
     requestAnimationFrame(() => el.classList.add('visible'));
 
-    const duration = opts.kind === 'trump' ? 2000 : 1300;
+    const duration =
+      opts.kind === 'match' ? 4500 :
+      opts.kind === 'hand'  ? 4000 :
+      opts.kind === 'bid'   ? 2400 :
+      opts.kind === 'trump' ? 2000 :
+                              1300;
     flashTimer = setTimeout(() => {
       el.classList.remove('visible');
       setTimeout(() => {
@@ -207,31 +269,92 @@
 
   function maybeFlashEvents(v) {
     if (!v) return;
+    const yourTeam = state.yourSeat != null ? state.yourSeat % 2 : null;
+
+    // --- Bid settled (earliest possible point) -----------------------------
+    // Fires on phase transition bid4/bid8 → trump_pick1. Detects the
+    // moment the engine resolves the 4-card round, whether via three
+    // passes, partner auto-pass, or the partner-lockout short-circuit.
+    if (prevPhase !== 'trump_pick1' && v.phase === 'trump_pick1' &&
+        v.highBid && v.seats && yourTeam != null) {
+      const bidderSeat = v.highBid.bidder;
+      const caller = (v.seats[bidderSeat] && v.seats[bidderSeat].name) || ('Seat ' + bidderSeat);
+      const bidderTeam = bidderSeat % 2;
+      showFlash({
+        kind: 'bid',
+        us: bidderTeam === yourTeam,
+        caller: caller,
+        bidDisplay: displayBid(v.highBid.amount),
+      });
+    }
+
+    // --- Trump reveal ------------------------------------------------------
     const trumpOpen = !!(v.isOpenTrump || v.trumpRevealed);
-    // Baseline the first view we get so we never flash on initial load
-    // or on reconnect mid-hand.
     if (prevTrumpOpen === null) prevTrumpOpen = trumpOpen;
     else if (trumpOpen && !prevTrumpOpen && v.trumpSuit) {
       showFlash({ kind: 'trump', suit: v.trumpSuit });
     }
+    const trumpJustOpened = (trumpOpen && !prevTrumpOpen);
     prevTrumpOpen = trumpOpen;
 
+    // --- Hand-won / Match-won ---------------------------------------------
+    // Detected via tokens delta. Priority: match > hand > trick.
+    const tokens = Array.isArray(v.tokens) ? v.tokens.slice() : null;
+    let handFlashed = false;
+    if (tokens && prevTokens !== null && yourTeam != null) {
+      const d0 = tokens[0] - prevTokens[0];
+      const d1 = tokens[1] - prevTokens[1];
+      if (d0 !== 0 || d1 !== 0) {
+        const winnerTeam = d0 > 0 ? 0 : 1;
+        const delta = Math.abs(d0);
+        const us = winnerTeam === yourTeam;
+        if (v.phase === 'game_over' || tokens[winnerTeam] >= 22) {
+          showFlash({ kind: 'match', us: us });
+        } else {
+          // Compute per-team display points from the view's trickPoints.
+          // v.trickPoints is [team0, team1] in internal units (×10).
+          let usPts = null, themPts = null;
+          if (Array.isArray(v.trickPoints) && v.trickPoints.length === 2) {
+            const yP = v.trickPoints[yourTeam] || 0;
+            const tP = v.trickPoints[1 - yourTeam] || 0;
+            usPts = displayPoints(yP);
+            themPts = displayPoints(tP);
+          }
+          const caller = (v.highBid && v.seats && v.seats[v.highBid.bidder])
+            ? v.seats[v.highBid.bidder].name : null;
+          const bidDisplay = v.highBid ? displayBid(v.highBid.amount) : null;
+          showFlash({
+            kind: 'hand',
+            us: us,
+            tokens: delta,
+            caller: caller,
+            bidDisplay: bidDisplay,
+            usPts: usPts,
+            themPts: themPts,
+          });
+        }
+        handFlashed = true;
+      }
+    }
+    if (tokens) prevTokens = tokens;
+
+    // --- Trick won --------------------------------------------------------
     const tp = v.tricksPlayed || 0;
     if (prevTricksPlayed === null) prevTricksPlayed = tp;
-    else if (tp > prevTricksPlayed && v.trickLeader != null && state.yourSeat != null) {
-      const yourTeam = state.yourSeat % 2;
+    else if (tp > prevTricksPlayed && v.trickLeader != null && yourTeam != null && !handFlashed) {
       const winnerTeam = v.trickLeader % 2;
-      // Suppress the trick-won flash on the same frame as a trump reveal
-      // so the two don't collide; the trump flash is more informative.
-      if (!(trumpOpen && !prevTrumpOpen && v.cutResolved)) {
+      if (!(trumpJustOpened && v.cutResolved)) {
         showFlash({ kind: 'trick', us: winnerTeam === yourTeam });
       }
     }
     prevTricksPlayed = tp;
+    prevPhase = v.phase || null;
   }
 
   // Reset the flash baselines when a new hand starts so we re-flash the
   // next hand's trump reveal and trick wins. Called from renderTable.
+  // Tokens baseline is NOT reset here — it carries across hands so the
+  // next token change fires a hand-won flash as expected.
   function resetFlashBaselinesIfHandChanged(v) {
     if (!v) return;
     const handKey = (v.handNumber || 0) + ':' + (v.phase === 'hand_end' ? 'end' : 'live');
