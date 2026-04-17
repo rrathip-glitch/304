@@ -315,6 +315,54 @@ button { cursor: pointer; }
 .head-right { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--cream-dim); flex-shrink: 0; }
 .hand-num { text-transform: uppercase; letter-spacing: 1px; }
 
+/* ============ Status-bar trump indicator ============
+ * Compact pill in the table header that always surfaces trump status:
+ *   • nothing — pre-pick phase
+ *   • TRUMP ♠ OPEN   — trump revealed to everyone
+ *   • TRUMP ♠ CLOSED — you're the maker; suit visible only to you
+ *   • TRUMP CLOSED   — you're not the maker; suit still hidden */
+.trump-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.trump-status:empty { display: none; }
+.trump-status .ts-label {
+  text-transform: uppercase;
+  color: var(--cream-dim);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+.trump-status .ts-suit {
+  font-size: 14px;
+  line-height: 1;
+  /* The suit symbol is rendered in its suit colour on a cream disc so the
+   * red hearts/diamonds stay legible on the dark header. */
+  background: var(--cream);
+  border-radius: 4px;
+  padding: 0 3px;
+  min-width: 14px;
+  text-align: center;
+}
+.trump-status .ts-suit.color-red { color: var(--red); }
+.trump-status .ts-suit.color-black { color: var(--black); }
+.trump-status .ts-state {
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-size: 10px;
+}
+.trump-status.open .ts-state { color: var(--gold); }
+.trump-status.closed .ts-state { color: var(--cream-dim); }
+
 .phase-banner {
   text-align: center;
   padding: 6px 10px;
@@ -540,10 +588,12 @@ button { cursor: pointer; }
   overflow-y: hidden;
   padding: 12px 8px 6px;
   gap: 0;
-  min-height: calc(var(--card-h) + 14px);
+  /* box-sizing: border-box — min-height must cover padding (18px) plus
+   * the full card height, or overflow-y clips the bottom rank/suit corner.
+   * +4px is a small cushion so focus rings / 1px borders stay visible. */
+  min-height: calc(var(--card-h) + 22px);
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
-  /* Reserve enough horizontal room for the lift-on-hover effect. */
 }
 .your-hand::-webkit-scrollbar { height: 4px; }
 .your-hand::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
@@ -744,7 +794,7 @@ button { cursor: pointer; }
     --card-w-trick: clamp(46px, 13vw, 66px);
   }
   .seat-cards.vertical .card { margin-top: -32px; }
-  .your-hand { padding: 8px 6px 4px; min-height: calc(var(--card-h) + 8px); }
+  .your-hand { padding: 8px 6px 4px; min-height: calc(var(--card-h) + 16px); }
   .phase-banner { padding: 4px 8px; min-height: 22px; font-size: 12px; }
   .log-wrap { max-height: 80px; }
 }

@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.4';
+  const BUILD = '2.2.5';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -448,6 +448,7 @@
     $('#table-code').textContent = state.roomId || '';
     $('#hand-num').textContent = 'Hand ' + (v.handNumber || 1);
     renderTokens(v.tokens || [11, 11]);
+    renderTrumpStatus(v);
 
     // Phase banner — shows the phase plus whose turn. Adds a "you can cut"
     // hint when it's your turn and you can't follow suit in a closed game,
@@ -488,6 +489,48 @@
 
     // Log
     renderLog(v.log || []);
+  }
+
+  // Status-bar trump indicator. Renders one of:
+  //   • nothing — no trump picked yet (bidding or pre-pick phases)
+  //   • "TRUMP <suit> · OPEN" — trump is public (open declared, auto-open,
+  //                             or cut-revealed)
+  //   • "TRUMP <suit> · CLOSED" — you are the trump maker and know the
+  //                              suit, but it's still closed to others
+  //   • "TRUMP · CLOSED" — you're not the maker; suit is hidden
+  // The suit is rendered with its symbol and the standard red/black colour.
+  function renderTrumpStatus(v) {
+    const el = $('#trump-status');
+    if (!el) return;
+    el.innerHTML = '';
+    el.classList.remove('open', 'closed', 'unknown');
+    if (!v || !v.trumpSuit) return;                      // pre-pick
+    const isOpen = !!(v.isOpenTrump || v.trumpRevealed);
+    const youAreMaker = v.trumpMaker === state.yourSeat;
+    // Non-makers in closed mode don't know the suit — server sends null
+    // for trumpSuit to them, so we never get here. But be defensive.
+    const suitVisible = isOpen || youAreMaker;
+
+    const label = document.createElement('span');
+    label.className = 'ts-label';
+    label.textContent = 'Trump';
+    el.appendChild(label);
+
+    if (suitVisible) {
+      const suit = document.createElement('span');
+      const s = v.trumpSuit;
+      suit.className = 'ts-suit color-' + (s === 'H' || s === 'D' ? 'red' : 'black');
+      suit.textContent = ({ S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' })[s] || '?';
+      el.appendChild(suit);
+    }
+
+    const status = document.createElement('span');
+    status.className = 'ts-state';
+    status.textContent = isOpen ? 'OPEN' : 'CLOSED';
+    el.appendChild(status);
+
+    el.classList.add(isOpen ? 'open' : 'closed');
+    if (!suitVisible) el.classList.add('unknown');
   }
 
   function renderBidStrip(v) {

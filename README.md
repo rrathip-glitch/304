@@ -1,6 +1,6 @@
 # 304 — Mobile Multiplayer Card Game
 
-[![version](https://img.shields.io/badge/version-2.2.4-blue.svg)](#release-notes)
+[![version](https://img.shields.io/badge/version-2.2.5-blue.svg)](#release-notes)
 
 A web-based implementation of **304**, a Sri Lankan trick-taking card game.
 Built mobile-first for seamless play between two humans (e.g. you and your
@@ -34,6 +34,21 @@ Any empty seats are filled by the AI.
 Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Release Notes
+
+### v2.2.5 — 2026-04-17
+
+- **Hand row no longer clips the bottom rank.** `.your-hand` had an
+  off-by-4 between its `min-height` and its padding, so with
+  `overflow-y: hidden` the mirrored bottom-right corner of every card
+  was getting shaved. Fix: bump the min-height buffer to cover the
+  full padding + card height in both the default and short-screen
+  media queries.
+- **Trump status pill in the status bar.** The table header now
+  surfaces trump as a compact pill: "TRUMP ♠ OPEN" when revealed,
+  "TRUMP ♠ CLOSED" to the trump maker (who knows the suit), and
+  "TRUMP CLOSED" to everyone else during a closed game. The suit
+  glyph is rendered on a cream disc in its native red/black colour
+  so hearts/diamonds stay legible on the dark felt header.
 
 ### v2.2.4 — 2026-04-17
 
