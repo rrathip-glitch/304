@@ -50,6 +50,16 @@ of the decision's scope. Chronological order within each bracket.
 | v2.2.15 | House rule | Soft bid8 partner lockout: only blocks at ≥ 250 |
 | v2.2.15 | UX | 3-column header (tokens · trump dial · code/hand); decorated seat pills |
 | v2.2.16 | House rule | Removed the askedPartner ≥ 200 floor — asker's partner can raise at any legal amount |
+| v2.2.17 | UX | Beauty sweep — larger header text, tighter play-area spacing |
+| v2.2.18 | Layout | Side seats out of row 1 (no span) — no more corner kissing with AI 2 |
+| v2.2.19 | Layout | 3-col symmetric; killed hand#/room-code; `.bid-readout` replaces bid-strip |
+| v2.2.20 | Layout | Tokens narrowed off the trump dial; side vertical stack caps for pill room |
+| v2.2.21 | UX | TRUMP pill badge always "TRUMP" (no "· open" suffix) + confined to 74 px |
+| v2.2.22 | Layout | `.play-area { overflow: visible }` — permanent end to clipped side pills |
+| v2.2.23 | UX | Bulletproof `.seat-name` (26 px + 2 px border + translateZ); in-game menu → Exit room |
+| v2.2.24 | Layout | Static play surface (fixed row 1 + static back-stack sizes); menu pinned bottom-right |
+| v2.2.25 | Layout | Reclaimed AI 2 dead space; fixed side-seat BID↔stack overlap; real dot spans for menu |
+| v2.2.26 | Layout | Side-seat vertical stack `flex: 1 1 0; max-height: 252px` — fixes CATASTROPHIC overlap when AI 1/3 is trump chooser |
 
 ---
 
