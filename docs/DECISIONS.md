@@ -432,5 +432,35 @@ protects against a stale view-render in the transition window.
 
 ---
 
+## 2026-04-17 — Cut reveal: only trump-suited face-downs are exposed — v2.2.4
+
+**Decision:** When `resolveTrick` detects a face-down trump and flips
+`trumpRevealed = true`, it now reveals ONLY the trump-suited face-down
+cards. Non-trump face-downs (the trump holder's defensive discard
+AND any other player's bluff cut attempt) stay face-down permanently.
+The view filter is hardened to honor `p.faceDown` per-card even after
+`state.trumpRevealed` is true, so a non-maker never sees the rank or
+suit of anyone else's non-trump face-down play.
+
+**Source:** User rule clarification (Q1=B):
+> "When a cut succeeds, only the trump-suited cards are revealed;
+> non-trump face-down cards stay hidden permanently."
+
+**Supersedes:** the v2.0.0 pagat-canonical behavior ("reveal all
+face-downs when a cut happens"). The household variant is more
+conservative — every player's discard privacy is protected.
+
+**Code touches:**
+- `game.js#resolveTrick` — the `currentTrick.map` branch no longer
+  flips non-trump cards.
+- `game.js#viewFor.currentTrick` — per-card `faceDown` check instead
+  of a global `trumpRevealed` toggle. Same filter applied to
+  `view.lastTrick` so the post-trick record can't leak either.
+- `scripts/cut-test.js` — new assertions that seat 2's non-trump 8D
+  stays face-down after seat 3 cuts with a trump, and that non-makers
+  still see it as a back via `viewFor`.
+
+---
+
 *Append new entries below this line. Do not modify prior entries — if a
 decision is reversed, add a new entry that references and supersedes it.*

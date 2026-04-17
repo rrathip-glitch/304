@@ -159,28 +159,34 @@ scoring) uses the internal value unchanged.
 
 ### Closed (default)
 - Trump indicator stays face-down.
-- When a player cannot follow suit, they **may guess** the closed trump
-  suit by playing a card of the suit they think trump is. The card is
-  played **face-down** ("cutting").
+- When a player cannot follow suit in a closed game, they **must** play a
+  card face-down. Two distinct tactical choices:
+  - **Discard** a non-trump card face-down (throw it away; it cannot win).
+  - **Cut** by playing a trump-suited card face-down — if it's the
+    highest trump on the trick, their team wins.
+  - The trump maker picks freely between the two (they know which card
+    is trump). A non-trump-holder is "submitting a card": they guess
+    whether trump is the suit they've chosen.
 - **Visibility** while the trick is in progress:
   - **The cutter** sees their own card (it's their tap).
-  - **The trump maker** privately sees every face-down card face-up. The
-    UI marks them with a tint + "cut" badge so the maker knows the others
-    still see backs.
+  - **The trump maker** privately sees every face-down card face-up (the
+    "maker peek"). The UI marks them with a tint + "cut" badge so the
+    maker knows the others still see backs.
   - **All other players** see only a face-down back. The seat tag in the
     trick area is prefixed with "cut — <name>" so everyone knows the
     intent, but the rank/suit is hidden.
 - **At end of trick**:
-  - If **no face-down card was the trump suit**: the face-downs stay
-    face-down permanently. Trick is won by the highest card of the suit
+  - If **no face-down card was the trump suit**: every face-down stays
+    hidden permanently. Trick is won by the highest card of the suit
     led.
-  - If **any face-down card was the trump suit**: the trump indicator is
-    revealed (returned to the trump maker's hand) and every other
-    face-down card is also flipped face-up. The cutter's team wins the
-    trick. The cutter leads the next trick. The game becomes **open**
-    for the remainder of the hand.
-  - **Trump maker's own face-down non-trump discard** remains hidden even
-    after a reveal — it stays a discard.
+  - If **any face-down card was the trump suit**: only the trump-suited
+    face-down cards are flipped face-up. **Non-trump face-down cards —
+    whether from the trump maker's defensive discard OR from another
+    player's bluff cut attempt — stay hidden permanently** *(house
+    rule, v2.2.4)*. The trump indicator is returned to the trump
+    maker's hand. The cutter's team wins the trick. The cutter leads
+    the next trick. The game becomes **open** for the remainder of the
+    hand.
 - Multiple players can cut on the same trick. The highest trump played
   face-down still wins per normal trump-card precedence.
 

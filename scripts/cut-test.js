@@ -104,6 +104,25 @@ console.log('Test 1: face-down cut reveals trump, awards trick, sets cutResolved
 
   // Score: cutting team (team 1, seats 1+3) wins this trick.
   assert(s.tricksWon[1] === 1, 'cutting team gets the trick');
+
+  // v2.2.4: only the trump-suited face-down is revealed. Seat 3's 7S
+  // (trump) is flipped; seat 2's 8D (non-trump bluff cut attempt)
+  // stays face-down in state forever.
+  const seat3Play = s.lastTrick.find((p) => p.seat === 3);
+  const seat2Play = s.lastTrick.find((p) => p.seat === 2);
+  assert(seat3Play && seat3Play.faceDown === false, 'seat 3 (trump cut) is flipped face-up');
+  assert(seat2Play && seat2Play.faceDown === true, 'seat 2 (non-trump bluff) STAYS face-down after the cut');
+
+  // And the view filter must still hide seat 2's non-trump face-down
+  // from non-maker seats even though trumpRevealed is true.
+  // (lastTrick is filtered through viewFor too.)
+  const view1 = game.viewFor(s, 1);
+  const seat2InView1 = view1.lastTrick.find((p) => p.seat === 2);
+  assert(seat2InView1 && seat2InView1.faceDown === true, 'seat 2 face-down visible as face-down to seat 1');
+  // We keep the card data on lastTrick intentionally for the post-
+  // trick inspection view; what matters is the `faceDown` flag so
+  // the UI renders a back. This mirrors the canonical rule of "the
+  // discard stays a discard" — nobody else ever sees what it was.
 }
 
 console.log('\nTest 2: trump indicator is tappable when maker can\'t follow suit');

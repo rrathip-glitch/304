@@ -510,11 +510,17 @@ function resolveTrick(state) {
       state.trumpRevealed = true;
       state.isOpenTrump = true;
       state.cutResolved = true;
+      // House rule (v2.2.4, user rule Q1=B): when a cut succeeds,
+      // reveal ONLY the trump-suited face-down cards. Non-trump
+      // face-downs — whether from the trump holder's defensive
+      // discard OR from another player's bluff cut attempt — stay
+      // hidden permanently. Every player's discard privacy is
+      // preserved; only the trump that actually cut gets exposed.
       state.currentTrick = state.currentTrick.map((p) => {
-        if (p.seat === state.trumpMaker && p.faceDown && p.card.suit !== state.trumpSuit) {
-          return p;
+        if (p.faceDown && p.card.suit === state.trumpSuit) {
+          return { ...p, faceDown: false };
         }
-        return { ...p, faceDown: false };
+        return p;
       });
       if (state.trumpIndicator) {
         state.hands[state.trumpMaker].push(state.trumpIndicator);
@@ -768,29 +774,44 @@ function viewFor(state, seat) {
     tricksWon: state.tricksWon.slice(),
     tricksPlayed: state.tricksPlayed,
     currentTrick: state.currentTrick.map((p) => {
-      // Face-down filtering for cutting:
-      //  • The cutter sees their own card (it's their tap).
-      //  • The trump maker sees ALL face-down cards face-up — this is their
-      //    private peek that lets them adjudicate cuts (we mark them with
-      //    `makerPeek` so the UI can render a tinted "the others see a back"
-      //    affordance instead of a vanilla face-up).
-      //  • Once trump has been revealed (a trump was cut OR open declared),
-      //    every player sees every card.
-      //  • Everyone else sees a back.
-      if (p.faceDown && p.seat !== seat && !state.trumpRevealed) {
-        if (seat === state.trumpMaker) {
-          return { seat: p.seat, card: p.card, faceDown: true, isTrumpIndicator: p.isTrumpIndicator, makerPeek: true };
-        }
-        return { seat: p.seat, faceDown: true, hidden: true };
+      // Visibility rules (v2.2.4):
+      //  • You always see your own card (including your own face-down
+      //    plays — you tapped them).
+      //  • Anyone can see a card that's face-up (either never face-down
+      //    or revealed as a trump cut).
+      //  • A face-down card from another seat is visible privately to
+      //    the trump maker (with `makerPeek: true` so the UI can render
+      //    the "others see a back" affordance). Everyone else sees a
+      //    faceless back (no `card` field at all — no way to leak rank
+      //    or suit via devtools).
+      //  • This holds even after state.trumpRevealed is true: a
+      //    non-trump face-down (a discard, or a bluff cut) stays
+      //    hidden from non-makers for the rest of the hand.
+      if (p.seat === seat) {
+        return { seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator };
       }
-      return { seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator };
+      if (!p.faceDown) {
+        return { seat: p.seat, card: p.card, faceDown: false, isTrumpIndicator: p.isTrumpIndicator };
+      }
+      if (seat === state.trumpMaker) {
+        return { seat: p.seat, card: p.card, faceDown: true, isTrumpIndicator: p.isTrumpIndicator, makerPeek: true };
+      }
+      return { seat: p.seat, faceDown: true, hidden: true };
     }),
     // True iff a face-down trump was just resolved this trick (informs the
     // client to play a "Cut!" reveal animation and add the suit announcement
     // to the banner). Cleared on the next trick's first play.
     cutResolved: !!state.cutResolved,
     cutWinnerSeat: state.cutResolved ? state.trickLeader : null,
-    lastTrick: state.lastTrick ? state.lastTrick.map((p) => ({ seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator })) : null,
+    // Same per-card hiding as currentTrick: a non-trump face-down
+    // from another seat is hidden (no `card` field) even in the
+    // post-trick record. Prevents leaking rank/suit via view.lastTrick.
+    lastTrick: state.lastTrick ? state.lastTrick.map((p) => {
+      if (p.seat === seat) return { seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator };
+      if (!p.faceDown) return { seat: p.seat, card: p.card, faceDown: false, isTrumpIndicator: p.isTrumpIndicator };
+      if (seat === state.trumpMaker) return { seat: p.seat, card: p.card, faceDown: true, isTrumpIndicator: p.isTrumpIndicator, makerPeek: true };
+      return { seat: p.seat, faceDown: true, hidden: true };
+    }) : null,
     legalActions: state.currentPlayer === seat || state.currentBidder === seat || (state.phase === PHASES.TRUMP_PICK1 && seat === state.trumpMaker) || (state.phase === PHASES.TRUMP_PICK2 && seat === state.trumpMaker) || (state.phase === PHASES.OPEN_CHOICE && seat === state.trumpMaker) || state.phase === PHASES.HAND_END ? legalActions(state, seat) : [],
   };
   return view;

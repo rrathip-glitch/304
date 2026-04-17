@@ -1,6 +1,6 @@
 # 304 — Mobile Multiplayer Card Game
 
-[![version](https://img.shields.io/badge/version-2.2.3-blue.svg)](#release-notes)
+[![version](https://img.shields.io/badge/version-2.2.4-blue.svg)](#release-notes)
 
 A web-based implementation of **304**, a Sri Lankan trick-taking card game.
 Built mobile-first for seamless play between two humans (e.g. you and your
@@ -34,6 +34,15 @@ Any empty seats are filled by the AI.
 Full rules are in [`docs/RULES.md`](docs/RULES.md).
 
 ## Release Notes
+
+### v2.2.4 — 2026-04-17
+
+- **Cut reveal scope tightened.** When a cut succeeds, only the
+  trump-suited face-down cards are flipped face-up. Non-trump
+  face-downs — whether a defensive discard or a bluff cut attempt —
+  stay hidden permanently. Everyone's discard privacy is protected.
+- View filter hardened to honor per-card `faceDown` regardless of
+  `trumpRevealed`, so no rank/suit leaks via DevTools.
 
 ### v2.2.3 — 2026-04-17
 
@@ -136,7 +145,7 @@ git merge <feature-branch> --no-edit
 git push origin claude/mobile-game-development-GifG7
 # wait ~60s, then:
 curl https://<your-app>.up.railway.app/version
-# → {"version":"2.2.3","startedAt":"..."}
+# → {"version":"2.2.4","startedAt":"..."}
 ```
 
 If `version` matches `package.json#version`, you're live. Full procedure,
