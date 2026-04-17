@@ -1,6 +1,6 @@
 {
   "name": "game-304",
-  "version": "2.2.19",
+  "version": "2.2.20",
   "description": "304 - Sri Lankan trick-taking card game, mobile-first multiplayer",
   "main": "server.js",
   "type": "commonjs",
