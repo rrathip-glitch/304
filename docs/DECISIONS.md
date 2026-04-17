@@ -40,6 +40,72 @@ of the decision's scope. Chronological order within each bracket.
 | v2.2.10 | House rule | Partner auto-pass + passed-seat lockout in bid4 |
 | v2.2.10 | Engine | Early-finalize when hand outcome is decided |
 | v2.2.10 | UX | Bid-settled + hand-won + match-won flash overlays |
+| v2.2.11 | UX | Flashes 1.7× longer; indicator always face-up for caller; opp indicator slot |
+| v2.2.11 | Engine | bid8 "one turn per seat" via `bid8Acted[]`; resume bid8 after trump_pick2 |
+| v2.2.12 | House rule | Removed the silent "2nd-turn ≥ 200" floor in bid4 |
+| v2.2.12 | UX | Token indicator now shows `N / 22` + proportional bar (fixed pip misread) |
+| v2.2.12 | Pacing | INSPECT / HAND_END AI delays tuned to flash duration + 1 s linger |
+
+---
+
+## 2026-04-17 — Bid8 one-shot; caller-playable indicator; token N/22 — v2.2.11–12
+
+**Context:** user feedback on the shipped v2.2.10 surfaced three
+separate bugs during live play:
+
+1. After someone outbid in the 8-card round, the remaining seats
+   never got to respond — the engine jumped straight to `open_choice`
+   after `trump_pick2`. User phrased it as "higher bid wins going in
+   play order; the other team should be able to respond."
+2. In bid4, after the user passed once on a weak opening, they were
+   silently blocked from making a cheap follow-up raise — the old
+   `minAllowedBid` returned 200 if `bidTurns[seat] >= 1`. Screenshot:
+   AI bid 70, user wanted to counter with 80, got chips starting at
+   100.
+3. The trump indicator was rendered FACE-DOWN to the caller in the
+   closed phase. User wanted it face-up (they picked it, they know
+   what it is) and tappable, in its separated slot. Non-callers had
+   no visual anchor at all.
+4. The token indicator drew exactly 5 pip dots regardless of the
+   actual count, so "US 7" and "THEM 15" showed the same dots — the
+   only thing that actually matters (the split) was invisible.
+
+**Decisions:**
+
+- **bid8 per-seat turn tracking** (`state.bid8Acted[]`). `advanceBid8`
+  rotates to the next unacted seat; if all remaining seats are locked
+  or acted, it closes the round. After a `trump_pick2`, control
+  returns to bid8 via `advanceBid8` instead of jumping to
+  `open_choice`.
+- **Removed the 2nd-turn ≥ 200 floor.** `minAllowedBid` now only
+  bumps to 200 when `askedPartner[seat]` is set (the ask-partner
+  commitment path is deliberate). On any turn otherwise, the floor
+  is 160 and the effective minimum is `max(160, highBid + 10)`.
+- **Indicator card for the caller**: always rendered face-up in the
+  separated `.indicator-slot` inside `#your-hand`, tappable whenever
+  the engine lists its id as legal. Flip animation on the
+  `.closed → .open` class swap is kept for the reveal moment.
+- **Indicator card for non-callers**: a new `.indicator-slot.opp`
+  lives inside the caller's opponent `.seat-cards`. The server's
+  `indicatorLocation` field drives it: `'closed'` → face-down back;
+  `'in-maker-hand'` → face-up with `indicatorCard` data;
+  `'played'` → slot hidden, regular back-stack count unchanged
+  (the indicator is now in `currentTrick`/`lastTrick`).
+- **Pacing**: the trick-won flash is 2400 ms, so the AI INSPECT
+  continue delay is 3200–3600 ms — long enough for the flash plus
+  ~1 s of trick-lingering. Hand-won flash is 6500 ms → HAND_END
+  delay 7200–7600 ms. Humans can still click Continue faster; the
+  delay only bounds the AI fallback.
+- **Token indicator**: replaced the fixed 5-pip rendering with
+  `<N>/<22>` + a thin proportional bar. Same team colour (gold for
+  your team, rose for theirs), no info lost, split readable at a
+  glance.
+
+**Compatibility notes:** legacy `.pip` CSS class is kept as
+`display: none` so a pre-v2.2.12 cached client doesn't show a stale
+dot row. Test fixtures that seed `PHASES.BID8` directly without
+`startHand` now rely on `handleBid8` / `advanceBid8`'s defensive
+`bid8Acted ||= [false, false, false, false]` init.
 
 ---
 
