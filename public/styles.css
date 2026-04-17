@@ -899,7 +899,15 @@ button { cursor: pointer; }
   grid-template-rows: minmax(76px, auto) 1fr;
   gap: 10px 6px;
   padding: 10px;
-  overflow: hidden;
+  /* v2.2.22: overflow flipped to visible — the prior `hidden` was
+   * the root cause of recurring "label clipped at top" reports (the
+   * seat name pill's thin gold border sat right against the cell's
+   * implicit clip boundary, so the top edge got shaved at certain
+   * pill positions). Internal stacks still self-cap via
+   * `.seat-cards.vertical { overflow: hidden }`, and the parent
+   * `#app.screen-table` retains `overflow: hidden` so the page as
+   * a whole never scrolls. */
+  overflow: visible;
 }
 .seat-slot { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 0; min-height: 0; }
 .seat-top { grid-column: 2; grid-row: 1; justify-self: stretch; align-self: end; }
@@ -960,12 +968,10 @@ button { cursor: pointer; }
   display: flex;
   gap: 2px;
   align-items: center;
-  /* v2.2.21: static positioning — the horizontal back stack now hugs
-   * the LEFT edge of its slot (prior `center` re-centred every play,
-   * visibly shifting the remaining backs). The slot itself is already
-   * centred inside its column via .seat-slot align-items, so the
-   * stack still reads as centred when full. */
-  justify-content: flex-start;
+  /* v2.2.22: re-centered (was flex-start in v2.2.21) so back stacks
+   * stay visually balanced inside their seat-slot. Matches the
+   * user-hand centering. */
+  justify-content: center;
   min-height: 0;
   min-width: 0;
 }
@@ -1136,21 +1142,14 @@ button { cursor: pointer; }
   display: flex;
   flex-direction: row;
   align-self: stretch;
-  /* v2.2.21: the old `safe center` recentred the row every time a
-   * card was played, so every remaining card drifted a few pixels —
-   * reading as "the playing surface is bouncing". Now cards are
-   * pinned to a left-aligned start with a symmetric padding so the
-   * hand reads as centered when full AND stable when cards leave. */
-  justify-content: flex-start;
+  /* v2.2.22: user asked for the remaining cards to be centered in
+   * the frame. `safe center` re-centres on card count (so the row
+   * drifts a bit as cards are played) but keeps the hand visually
+   * balanced — matches the natural card-game feel. */
+  justify-content: safe center;
   overflow-x: auto;
   overflow-y: hidden;
-  /* v2.2.9: extra top padding accommodates the indicator-slot's badge
-   * (~14 px). Bottom padding unchanged. min-height covers padding +
-   * card height so overflow-y:hidden doesn't clip the bottom corner.
-   * v2.2.21: horizontal padding uses max() so the hand is centred
-   * on wide phones (8 cards ≈ 354 px; viewport 390+) while never
-   * dropping below the 8 px min on narrow ones. */
-  padding: 18px max(8px, calc((100% - 356px) / 2)) 6px;
+  padding: 18px 8px 6px;
   gap: 0;
   min-height: calc(var(--card-h) + 28px);
   scrollbar-width: thin;
