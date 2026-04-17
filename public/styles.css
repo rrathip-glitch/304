@@ -479,10 +479,10 @@ button { cursor: pointer; }
 .tokens {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   align-items: flex-start;
-  min-width: 0;
-  flex-shrink: 1;
+  width: 134px;              /* v2.2.25: symmetric with .bid-readout */
+  flex: none;
 }
 /* v2.2.19 / v2.2.20: each .team is a fixed-width row with three aligned
  * slots — [label] [num /22] [bar, right-aligned]. The label has a
@@ -605,9 +605,9 @@ button { cursor: pointer; }
 .bid-readout {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;                  /* v2.2.25: matches .tokens gap for row rhythm parity */
   width: 134px;
-  padding: 2px 0;
+  padding: 0;
   box-sizing: border-box;
   transition: opacity 240ms ease;
   opacity: 0;
@@ -844,7 +844,10 @@ button { cursor: pointer; }
   flex-direction: row;
   align-items: center;
   gap: 4px;
-  margin: 2px auto 4px;
+  /* v2.2.25: margins bumped so the pill has clear air above and below.
+   * Previously the pill visually touched the back stack on AI 3 and
+   * sometimes the seat-name above. */
+  margin: 4px auto 10px;
   padding: 2px 5px 2px 4px;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid var(--gold);
@@ -854,6 +857,7 @@ button { cursor: pointer; }
   max-width: 74px;
   box-sizing: border-box;
   overflow: hidden;
+  flex: none;
 }
 .seat-indicator .seat-indicator-badge {
   font-size: 9px;
@@ -903,19 +907,19 @@ button { cursor: pointer; }
   min-height: 0;
   display: grid;
   grid-template-columns: 80px 1fr 80px;
-  /* v2.2.24: row 1 is now a FIXED 164 px — enough to hold AI 2 as a
-   * trump maker (name + TRUMP indicator pill + 8-card back stack +
-   * bid pill). Prior `minmax(76px, auto)` caused the whole play area
-   * to jump every time AI 2 became trump maker (or stopped being
-   * one) because row 1 would grow/shrink. With a fixed height
-   * nothing on the surface shifts round to round. */
-  grid-template-rows: 164px 1fr;
+  /* v2.2.25: row 1 trimmed 164 → 144 px — the extra 20 px of unused
+   * space above AI 2 (visible in the "8-card bidding" screenshot) is
+   * gone, while still fitting AI 2 as a trump maker (name ~34 +
+   * indicator ~36 + stack 56 + bid ~28 = 154 px; overflow is tiny
+   * and non-damaging with .play-area { overflow: visible }). Size
+   * stays fixed so the surface never jumps round-to-round. */
+  grid-template-rows: 144px 1fr;
   gap: 10px 6px;
   padding: 10px;
   overflow: visible;
 }
 .seat-slot { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 0; min-height: 0; overflow: visible; }
-.seat-top { grid-column: 2; grid-row: 1; justify-self: stretch; align-self: end; }
+.seat-top { grid-column: 2; grid-row: 1; justify-self: stretch; align-self: center; justify-content: center; }
 /* v2.2.18 / v2.2.19: side seats live in row 2 only (no span), and now
  * `justify-self: stretch` so the seat-slot fills the 88 px column —
  * the label pills can spread full width instead of being clipped by
@@ -1026,7 +1030,10 @@ button { cursor: pointer; }
  * empty .seat-bid is collapsed (no stray outline / empty pill).
  * "pass" renders in a muted pill; numeric bids in a gold-accented pill. */
 .seat-bid {
-  margin-top: 6px;
+  /* v2.2.25: margin bumped 6 → 10 so the bid pill sits clear of the
+   * back stack above it; the side columns had the pill visually
+   * kissing the bottom card in the v2.2.24 screenshot. */
+  margin-top: 10px;
   font-size: 11px;
   letter-spacing: 0.9px;
   font-weight: 600;
@@ -1316,14 +1323,18 @@ button { cursor: pointer; }
   z-index: 130;
 }
 .menu-btn .menu-btn-dots {
-  display: block;
-  font-size: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
   line-height: 1;
-  letter-spacing: 1px;
-  transform: translateY(-6px);          /* optical centre for the "···" glyph */
-  color: var(--gold);
-  font-weight: 800;
-  font-family: -apple-system, system-ui, "Helvetica Neue", sans-serif;
+}
+.menu-btn .menu-btn-dots .dot {
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--gold);
 }
 .menu-btn:active { transform: scale(0.95); }
 .menu-popup {
