@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="theme-color" content="#0d4a2b">
   <title>304 — card game</title>
-  <link rel="stylesheet" href="styles.css?v=2.2.22">
+  <link rel="stylesheet" href="styles.css?v=2.2.23">
 </head>
 <body>
   <div id="app" class="screen-landing">
@@ -32,7 +32,7 @@
           <input id="code-input" type="text" maxlength="6" autocomplete="off" placeholder="ABC123" />
         </label>
         <button id="join-btn" class="btn">Join room</button>
-        <div class="build-marker" id="build-marker">v2.2.22 — tap for diagnostics</div>
+        <div class="build-marker" id="build-marker">v2.2.23 — tap for diagnostics</div>
       </div>
     </section>
 
@@ -73,7 +73,7 @@
         <div class="trump-dial" id="trump-dial">
           <span class="trump-dial-inner" id="trump-dial-inner">?</span>
         </div>
-        <!-- v2.2.22: current-bid readout replaces the old hand-# / room-code
+        <!-- v2.2.23: current-bid readout replaces the old hand-# / room-code
              cluster. Styling follows the header rhythm: gold primary value,
              muted small-caps secondary meta. Empty when no bid yet. -->
         <div class="head-right" id="head-right">
@@ -126,6 +126,16 @@
       <div class="action-bar" id="action-bar">
         <div class="action-chips" id="action-chips"></div>
         <div class="action-extras" id="action-extras"></div>
+        <!-- v2.2.23: menu button (bottom-right of the action bar). Tap
+             opens a small popup with "Exit room" — leaves the game,
+             clears session, and returns to the landing screen. -->
+        <button id="menu-btn" class="menu-btn" aria-label="Menu">⋯</button>
+      </div>
+
+      <!-- Menu popup — hidden by default; toggled by #menu-btn. -->
+      <div id="menu-popup" class="menu-popup hidden" role="menu">
+        <button class="menu-item menu-item-danger" id="exit-room-btn">Exit room</button>
+        <button class="menu-item" id="menu-close-btn">Cancel</button>
       </div>
 
       <!-- Log -->
@@ -142,7 +152,7 @@
 
   <!-- Debug overlay: tap the build marker to toggle. Off by default. -->
   <div id="debug-overlay" class="debug-overlay hidden">
-    <div class="debug-row">build: <b id="dbg-build">2.2.22</b></div>
+    <div class="debug-row">build: <b id="dbg-build">2.2.23</b></div>
     <div class="debug-row">socket: <b id="dbg-sock">-</b></div>
     <div class="debug-row">gate: <b id="dbg-gate">-</b></div>
     <div class="debug-row">queued: <b id="dbg-pending">0</b></div>
@@ -152,7 +162,7 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="cards.js?v=2.2.22"></script>
-  <script src="client.js?v=2.2.22"></script>
+  <script src="cards.js?v=2.2.23"></script>
+  <script src="client.js?v=2.2.23"></script>
 </body>
 </html>

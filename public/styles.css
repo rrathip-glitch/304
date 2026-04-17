@@ -909,7 +909,7 @@ button { cursor: pointer; }
    * a whole never scrolls. */
   overflow: visible;
 }
-.seat-slot { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 0; min-height: 0; }
+.seat-slot { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 0; min-height: 0; overflow: visible; }
 .seat-top { grid-column: 2; grid-row: 1; justify-self: stretch; align-self: end; }
 /* v2.2.18 / v2.2.19: side seats live in row 2 only (no span), and now
  * `justify-self: stretch` so the seat-slot fills the 88 px column —
@@ -928,29 +928,45 @@ button { cursor: pointer; }
  * padding, and a soft glow when the seat is the current actor. Keeps
  * the names readable without looking like naked text on the felt. */
 .seat-name {
-  display: inline-block;
+  /* v2.2.23: bulletproof — explicit height + box-sizing: border-box +
+   * 2 px solid border + background-clip:padding-box so the border is
+   * always painted over its own background and the top edge is never
+   * shaved by sub-pixel rendering or an ancestor clip. Earlier fixes
+   * (overflow:visible on .play-area, stronger opacity border, more
+   * padding) didn't stick on iOS Safari — this one renders the pill
+   * as an explicit block with its own stacking context. */
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 26px;
+  min-height: 26px;
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.7px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
   color: var(--cream-dim);
   margin-bottom: 6px;
-  padding: 4px 12px;
+  padding: 0 14px;
+  line-height: 1;
   text-align: center;
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: linear-gradient(180deg, rgba(12,28,18,0.92) 0%, rgba(6,18,12,0.85) 100%);
-  /* v2.2.21: border strengthened 0.26 → 0.55 opacity so the pill always
-   * reads as a crisp, complete oval against the felt — earlier screenshots
-   * showed the pill top looking "cut" because the 26% gold was barely
-   * discernible from the felt gradient. */
-  border: 1px solid rgba(230, 200, 106, 0.55);
+  background: #0c1a12;
+  background-clip: padding-box;
+  border: 2px solid rgba(230, 200, 106, 0.7);
   border-radius: 999px;
   box-shadow:
-    0 2px 4px rgba(0,0,0,0.5),
-    inset 0 1px 0 rgba(255,255,255,0.08);
+    0 3px 6px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.05);
   transition: border-color 180ms ease, box-shadow 180ms ease, color 180ms ease;
+  /* Force hardware acceleration — eliminates the iOS sub-pixel "top
+   * edge gets shaved" class of bugs. */
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
 }
 .seat-name.active {
   color: var(--gold);
@@ -1256,6 +1272,78 @@ button { cursor: pointer; }
   border-top: 1px solid rgba(0,0,0,0.5);
   padding: 8px 10px;
   min-height: 60px;
+  position: relative;
+}
+
+/* v2.2.23: in-game menu button + popup. Button is anchored to the
+ * bottom-right corner of the action bar; popup appears above it,
+ * styled to match the header theme. */
+.menu-btn {
+  position: absolute;
+  right: 10px;
+  top: 6px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.3) 100%);
+  border: 1px solid rgba(230, 200, 106, 0.35);
+  color: var(--cream);
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: 2px;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.45);
+  cursor: pointer;
+  z-index: 20;
+}
+.menu-btn:active { transform: scale(0.95); }
+.menu-popup {
+  position: fixed;
+  right: 16px;
+  bottom: calc(76px + var(--safe-bottom));
+  z-index: 140;
+  min-width: 180px;
+  padding: 6px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(8,18,12,0.96) 0%, rgba(4,10,7,0.94) 100%);
+  border: 1px solid rgba(230, 200, 106, 0.45);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.menu-popup.hidden { display: none; }
+.menu-popup .menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  color: var(--cream);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.menu-popup .menu-item:hover,
+.menu-popup .menu-item:active {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(230, 200, 106, 0.3);
+}
+.menu-popup .menu-item-danger {
+  color: #f0b5b5;
+}
+.menu-popup .menu-item-danger:hover,
+.menu-popup .menu-item-danger:active {
+  color: #fff;
+  background: rgba(180, 58, 58, 0.35);
+  border-color: rgba(255, 170, 170, 0.5);
 }
 .action-chips {
   display: flex;

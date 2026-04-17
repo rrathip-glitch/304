@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.22';
+  const BUILD = '2.2.23';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -623,6 +623,42 @@
     clearSession();
     window.location.reload();
   });
+
+  // v2.2.23: in-game menu — bottom-right ⋯ button toggles a small
+  // popup with an Exit room option. Exit room disconnects (socket will
+  // naturally close on reload), clears the session, and drops back to
+  // the landing screen. The rest of the table's stall-fallback kicks
+  // in for AI to take over the vacated seat.
+  const menuBtn = document.getElementById('menu-btn');
+  const menuPopup = document.getElementById('menu-popup');
+  const menuCloseBtn = document.getElementById('menu-close-btn');
+  const exitRoomBtn = document.getElementById('exit-room-btn');
+  function closeMenu() { if (menuPopup) menuPopup.classList.add('hidden'); }
+  function openMenu()  { if (menuPopup) menuPopup.classList.remove('hidden'); }
+  if (menuBtn && menuPopup) {
+    menuBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      menuPopup.classList.toggle('hidden');
+    });
+    // Tap outside the popup closes it.
+    document.addEventListener('click', (ev) => {
+      if (menuPopup.classList.contains('hidden')) return;
+      if (menuPopup.contains(ev.target) || ev.target === menuBtn) return;
+      closeMenu();
+    });
+  }
+  if (menuCloseBtn) menuCloseBtn.addEventListener('click', closeMenu);
+  if (exitRoomBtn) {
+    exitRoomBtn.addEventListener('click', () => {
+      closeMenu();
+      // Tell the server we're leaving so our seat is vacated cleanly
+      // (best-effort; the reload will close the socket anyway).
+      try { socket.emit('leaveRoom'); } catch (e) { /* ignore */ }
+      clearSession();
+      // Full reload = fresh landing screen with no session state.
+      window.location.reload();
+    });
+  }
 
   $('#start-btn').addEventListener('click', (e) => {
     e.preventDefault();
