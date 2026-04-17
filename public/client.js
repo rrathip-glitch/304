@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.12';
+  const BUILD = '2.2.13';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -850,12 +850,16 @@
   }
 
   // Opponents (top/left/right): face-down backs for each card in hand.
-  // v2.2.11: if an opponent IS the trump maker, we also render a
-  // separated, labeled "indicator" slot in their stack. The slot starts
-  // face-down while the game is closed, flips face-up when trump is
-  // revealed (open declare, cut, or auto-open), and is removed from view
-  // once the indicator has been played to a trick. This gives non-makers
-  // the same visual anchor on the picked card that the maker has.
+  // v2.2.13: if an opponent IS the trump maker, the indicator slot is
+  // rendered as a DEDICATED element next to the seat name (not inside
+  // .seat-cards). This keeps the back-stack perfectly symmetric and
+  // avoids the asymmetric push observed in the v2.2.12 screenshot
+  // (partner's stack got shoved left, overlapping the left opp's area).
+  //   closed        → small face-down card with a "Trump" badge above.
+  //   in-maker-hand → same slot, flipped face-up with the card data
+  //                   (open-reveal animation triggers on the class
+  //                   swap from .closed → .open).
+  //   played        → slot removed; back-stack count unchanged.
   function renderOpponentSeats(v) {
     const handCounts = v.handCounts || [0, 0, 0, 0];
     for (let seat = 0; seat < 4; seat++) {
@@ -872,29 +876,44 @@
       cardsEl.innerHTML = '';
       const count = handCounts[seat] || 0;
 
-      // Is this opponent the trump maker, and does their indicator need
-      // its own slot right now? Hidden once indicator is 'played'.
       const isMakerSeat = v.trumpMaker === seat;
       const loc = v.indicatorLocation;
       const showIndicator = isMakerSeat && (loc === 'closed' || loc === 'in-maker-hand');
-      // When the indicator is back inside hands[maker] (open phase),
+      // When the indicator lives inside hands[maker] (open phase),
       // handCounts already counts it — subtract 1 from the back stack
       // so we don't double-render it.
       const indicatorInHandCount = loc === 'in-maker-hand' ? 1 : 0;
       const backCount = Math.max(0, count - indicatorInHandCount);
 
+      // Render the back stack first (always symmetric).
+      const toDraw = Math.min(backCount, 8);
+      for (let i = 0; i < toDraw; i++) {
+        cardsEl.appendChild(Cards.renderBack());
+      }
+
+      // Dedicated indicator element lives alongside the seat name —
+      // outside .seat-cards so the stack stays centered. Reuse a
+      // persistent child node so the open-flip CSS animation can
+      // trigger on the class swap rather than every re-render.
+      let indEl = el.querySelector('.seat-indicator');
       if (showIndicator) {
+        if (!indEl) {
+          indEl = document.createElement('div');
+          indEl.className = 'seat-indicator';
+          // Insert after the name but before the cards — gives a clear
+          // "this seat's trump card" affordance at the top of the slot.
+          const nameEl = el.querySelector('.seat-name');
+          nameEl.parentNode.insertBefore(indEl, nameEl.nextSibling);
+        }
         const isOpen = loc === 'in-maker-hand';
-        const wrap = document.createElement('div');
-        wrap.className = 'indicator-slot opp ' + (isOpen ? 'open' : 'closed');
+        indEl.innerHTML = '';
+        indEl.className = 'seat-indicator ' + (isOpen ? 'open' : 'closed');
 
         const badge = document.createElement('span');
-        badge.className = 'indicator-badge';
+        badge.className = 'seat-indicator-badge';
         badge.textContent = isOpen ? 'Trump · open' : 'Trump';
-        wrap.appendChild(badge);
+        indEl.appendChild(badge);
 
-        // Closed: face-down back (suit hidden). Open: face-up with the
-        // card data the server now streams to all seats.
         let cardEl;
         if (isOpen && v.indicatorCard) {
           cardEl = Cards.render(v.indicatorCard, { small: true });
@@ -902,14 +921,11 @@
           cardEl = Cards.renderBack();
           cardEl.classList.add('small');
         }
-        cardEl.classList.add('indicator-card');
-        wrap.appendChild(cardEl);
-        cardsEl.appendChild(wrap);
-      }
-
-      const toDraw = Math.min(backCount, 8);
-      for (let i = 0; i < toDraw; i++) {
-        cardsEl.appendChild(Cards.renderBack());
+        cardEl.classList.add('seat-indicator-card');
+        indEl.appendChild(cardEl);
+      } else if (indEl) {
+        // Indicator was played (or this seat is no longer the maker).
+        indEl.remove();
       }
 
       // Bid indicator

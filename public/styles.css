@@ -422,7 +422,7 @@ button { cursor: pointer; }
   letter-spacing: 4px;
   color: var(--gold);
 }
-.room-code.small { font-size: 14px; letter-spacing: 2px; }
+.room-code.small { font-size: 12px; letter-spacing: 1px; white-space: nowrap; }
 .hint { font-size: 12px; color: var(--cream-dim); margin-top: 4px; }
 
 .seats { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 20px; }
@@ -520,8 +520,26 @@ button { cursor: pointer; }
 /* Legacy `.pip` class kept as a no-op for any stale markup (e.g.
  * a pre-v2.2.12 cached client); hidden so the old dots don't leak. */
 .pip { display: none; }
-.head-right { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--cream-dim); flex-shrink: 0; }
-.hand-num { text-transform: uppercase; letter-spacing: 1px; }
+/* v2.2.13: the header right side (trump pill + hand # + room code) was
+ * shifting the room code off-screen on narrow phones. Fix is two-fold:
+ *   • allow this cluster to shrink AND wrap when space is tight
+ *     (flex-shrink: 1 + flex-wrap + min-width: 0)
+ *   • tighten the room-code.small size/letter-spacing so the 6-char
+ *     room code fits comfortably inline with the rest.
+ * Screenshots captured the old NABP65 code clipping after "NAB". */
+.head-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--cream-dim);
+  flex-shrink: 1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 66%;
+}
+.hand-num { text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
 
 /* ============ Status-bar trump indicator ============
  * Compact pill in the table header that always surfaces trump status:
@@ -631,12 +649,15 @@ button { cursor: pointer; }
   flex-direction: column;
   align-items: center;
   flex: 0 0 auto;
-  /* Visible gap from the rest of the hand. The next card's negative
-   * margin-left (−18 px) is cancelled and a positive gap added. */
-  margin-right: 24px;
+  /* v2.2.13: bumped from 24px → 36px to prevent the first regular card's
+   * gold-ring legal-glow from bleeding into the indicator's right edge.
+   * Screenshot confirmed the 24px gap wasn't enough once both the
+   * indicator AND the next card were tappable-legal at the same time. */
+  margin-right: 36px;
   /* Leave room for the badge above the card. */
   padding-top: 14px;
   position: relative;
+  z-index: 1;
 }
 .indicator-slot .indicator-badge {
   position: absolute;
@@ -680,45 +701,53 @@ button { cursor: pointer; }
  * the ONLY child (rare corner cases). */
 .your-hand .indicator-slot + .card { margin-left: 0; }
 
-/* Opponent indicator slot (v2.2.11) — scaled-down version for the
- * top/left/right seat stacks. Renders the caller's picked card face-down
- * while closed, face-up with a flip animation once trump is revealed.
- * Positioned INSIDE .seat-cards so it's obviously part of the caller's
- * deck but visually separated from the normal back stack via the badge
- * and margin.
+/* Opponent indicator (v2.2.13) — rendered as a DEDICATED element next
+ * to the seat name, sibling of .seat-cards rather than a child. This
+ * keeps the back-stack geometrically symmetric (no left-side push on
+ * the top seat, no top-only crowding on the side seats) while still
+ * visually attaching the trump card to the correct seat.
  *
- * Size: uses --card-w-sm (the back-stack card scale) instead of
- * --card-w, so the slot sits naturally in the opponent stack.
- * Badge is tighter and rendered at the side for horizontal stacks,
- * above for vertical stacks. */
-.seat-cards .indicator-slot.opp {
-  margin-right: 8px;
-  padding-top: 12px;
-  /* Keep the slot flow-compatible with the negative margins the
-   * other back-stack cards use. */
-  z-index: 1;
+ * The v2.2.11 inline-in-stack rendering (.indicator-slot.opp inside
+ * .seat-cards) was retired because it asymmetrically shoved the
+ * partner's back-stack left, overlapping the left opponent's area. */
+.seat-indicator {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin: 2px auto 6px;
+  padding: 10px 0 0;
+  position: relative;
+  perspective: 400px;
 }
-.seat-cards.vertical .indicator-slot.opp {
-  margin-right: 0;
-  margin-bottom: 10px;
-  padding-top: 12px;
-}
-.seat-cards .indicator-slot.opp .indicator-badge {
+.seat-indicator .seat-indicator-badge {
   font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--gold);
   padding: 1px 6px;
-  letter-spacing: 1px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
 }
-.seat-cards .indicator-slot.opp .card.indicator-card {
+.seat-indicator .card.seat-indicator-card {
   width: var(--card-w-sm);
   height: var(--card-h-sm);
-  margin-left: 0 !important;
-  margin-top: 0 !important;
+  box-shadow: 0 0 0 2px var(--gold), var(--shadow);
+  margin: 0 !important;
+  transition: transform 520ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
-/* Prevent the back stack's overlapping margin from chewing into the
- * indicator slot (the first real back after the slot should start
- * fresh, not underneath). */
-.seat-cards .indicator-slot.opp + .card { margin-left: 0; }
-.seat-cards.vertical .indicator-slot.opp + .card { margin-top: 0; }
+.seat-indicator.open .card.seat-indicator-card {
+  animation: indicatorFlip 520ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
 
 /* ============ Play area (seats + trick) ============
  * Grid layout with content-sized side columns so opponent stacks claim only
