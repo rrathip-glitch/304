@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.13';
+  const BUILD = '2.2.14';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -158,12 +158,40 @@
   let prevTokens = null;         // [t0, t1] | null
   let prevPhase = null;
   let flashTimer = null;
+  // v2.2.14: flashes run SEQUENTIALLY via a queue. Previously, if two
+  // events landed in the same view update (most commonly an auto-open
+  // trump reveal on the same trick that early-finalised the hand), the
+  // second flash cancelled the first — the user never saw the trump
+  // reveal. Now we enqueue and play back-to-back with a short gap, so
+  // the order of narration matches the order of events (trump first,
+  // hand won second).
+  const flashQueue = [];
+  let flashActive = false;
   const SUIT_GLYPH = { S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663' };
   const SUIT_FULL = { S: 'Spades', H: 'Hearts', D: 'Diamonds', C: 'Clubs' };
 
   function showFlash(opts) {
+    // Dedup a flash that's already queued with the same kind+us signature.
+    // Guards against redundant enqueues if a view is replayed.
+    const key = (opts.kind || '') + ':' + (opts.us ? 'us' : 'them');
+    if (flashQueue.some((q) => q._key === key)) return;
+    opts._key = key;
+    flashQueue.push(opts);
+    if (!flashActive) runNextFlash();
+  }
+
+  function runNextFlash() {
+    if (flashQueue.length === 0) {
+      flashActive = false;
+      return;
+    }
+    flashActive = true;
+    renderFlash(flashQueue.shift());
+  }
+
+  function renderFlash(opts) {
     const el = document.getElementById('flash-overlay');
-    if (!el) return;
+    if (!el) { runNextFlash(); return; }
     // Reset any in-flight flash cleanly before starting the next.
     if (flashTimer) { clearTimeout(flashTimer); flashTimer = null; }
     el.className = 'flash-overlay hidden';
@@ -265,6 +293,10 @@
         el.classList.add('hidden');
         el.className = 'flash-overlay hidden';
         el.innerHTML = '';
+        // v2.2.14: kick the next queued flash (short breathing gap of
+        // ~260 ms between flashes so the user sees the overlay drop
+        // before the next one rises).
+        setTimeout(runNextFlash, 260);
       }, 280);
     }, duration);
   }

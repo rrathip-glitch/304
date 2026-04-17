@@ -458,17 +458,20 @@ button { cursor: pointer; }
 .table-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   padding: 6px 12px;
   background: rgba(0,0,0,0.35);
   border-bottom: 1px solid rgba(0,0,0,0.4);
   min-height: 40px;
   flex-shrink: 0;
-  /* Header is bound to the top of the table screen, but the safe-area
-   * already pads #app from the top, so no further offset needed here. */
-  gap: 8px;
+  gap: 10px;
 }
-.tokens { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+/* v2.2.14: both sides of the header stack as column flex with a matching
+ * row rhythm (4px gap, 12–11px line-height). Prior layout wrapped the
+ * right cluster ad-hoc, which made it misaligned with the left token
+ * column. Now row 1 (tokens↔trump) and row 2 (second token↔hand+code)
+ * share a baseline. */
+.tokens { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; }
 .team { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .team .label { color: var(--cream-dim); text-transform: uppercase; letter-spacing: 1px; }
 .team-0 .label { color: var(--gold); }
@@ -520,24 +523,28 @@ button { cursor: pointer; }
 /* Legacy `.pip` class kept as a no-op for any stale markup (e.g.
  * a pre-v2.2.12 cached client); hidden so the old dots don't leak. */
 .pip { display: none; }
-/* v2.2.13: the header right side (trump pill + hand # + room code) was
- * shifting the room code off-screen on narrow phones. Fix is two-fold:
- *   • allow this cluster to shrink AND wrap when space is tight
- *     (flex-shrink: 1 + flex-wrap + min-width: 0)
- *   • tighten the room-code.small size/letter-spacing so the 6-char
- *     room code fits comfortably inline with the rest.
- * Screenshots captured the old NABP65 code clipping after "NAB". */
+/* v2.2.14: right cluster matches the tokens column — two stacked rows.
+ *   row 1: trump pill         (aligns with "US N/22")
+ *   row 2: hand # · room code (aligns with "THEM N/22")
+ * flex-direction: column-end keeps both rows right-aligned so the
+ * header reads as a clean two-column layout regardless of phone width. */
 .head-right {
   display: flex;
-  gap: 8px;
-  align-items: center;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
   font-size: 12px;
   color: var(--cream-dim);
   flex-shrink: 1;
-  flex-wrap: wrap;
-  justify-content: flex-end;
   min-width: 0;
-  max-width: 66%;
+  max-width: 60%;
+}
+.head-right-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
+  white-space: nowrap;
 }
 .hand-num { text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
 
@@ -701,50 +708,58 @@ button { cursor: pointer; }
  * the ONLY child (rare corner cases). */
 .your-hand .indicator-slot + .card { margin-left: 0; }
 
-/* Opponent indicator (v2.2.13) — rendered as a DEDICATED element next
- * to the seat name, sibling of .seat-cards rather than a child. This
- * keeps the back-stack geometrically symmetric (no left-side push on
- * the top seat, no top-only crowding on the side seats) while still
- * visually attaching the trump card to the correct seat.
- *
- * The v2.2.11 inline-in-stack rendering (.indicator-slot.opp inside
- * .seat-cards) was retired because it asymmetrically shoved the
- * partner's back-stack left, overlapping the left opponent's area. */
+/* Opponent indicator (v2.2.14) — HORIZONTAL pill layout: a gold
+ * "TRUMP" badge beside a micro-sized card. Prior vertical layout
+ * (badge stacked above a small card) ate ~80 px of row-1 height
+ * on the top seat, squeezing the trick row on short phones.
+ * Horizontal variant is ~28 px tall and sits inline with the seat
+ * name row. Flip animation on the `.closed → .open` class swap is
+ * preserved. */
 .seat-indicator {
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 3px;
-  margin: 2px auto 6px;
-  padding: 10px 0 0;
+  gap: 5px;
+  margin: 2px auto 4px;
+  padding: 2px 6px 2px 4px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--gold);
+  border-radius: 999px;
   position: relative;
   perspective: 400px;
 }
 .seat-indicator .seat-indicator-badge {
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  color: var(--ink);
-  background: var(--gold);
-  padding: 1px 6px;
-  border-radius: 999px;
+  color: var(--gold);
   white-space: nowrap;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  line-height: 1;
   pointer-events: none;
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2;
 }
 .seat-indicator .card.seat-indicator-card {
-  width: var(--card-w-sm);
-  height: var(--card-h-sm);
-  box-shadow: 0 0 0 2px var(--gold), var(--shadow);
+  /* Tiny card — big enough to read rank + suit, small enough to sit
+   * inline with the seat-name row without pushing the back stack. */
+  width: 20px;
+  height: 28px;
+  min-width: 20px;
+  box-shadow: 0 0 0 1px var(--gold), 0 1px 2px rgba(0,0,0,0.4);
   margin: 0 !important;
+  border-radius: 3px;
   transition: transform 520ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  overflow: hidden;
 }
+.seat-indicator .card.seat-indicator-card .card-rank,
+.seat-indicator .card.seat-indicator-card .card-rank-bl {
+  top: 1px;
+  left: 1px;
+  bottom: 1px;
+  right: 1px;
+}
+.seat-indicator .card.seat-indicator-card .c-rank { font-size: 8px; }
+.seat-indicator .card.seat-indicator-card .c-suit { font-size: 6px; }
+.seat-indicator .card.seat-indicator-card .card-center { display: none; }
 .seat-indicator.open .card.seat-indicator-card {
   animation: indicatorFlip 520ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
