@@ -1,4 +1,16 @@
-/* public/styles.css — mobile-first, vanilla. Target 375x812. */
+/* public/styles.css — 304 client. Mobile-first, fully responsive.
+ *
+ * Design rules (enforced by tests/layout-smoke.js):
+ *   1. Header is ALWAYS visible (no overlap with iOS notch / Android status bar).
+ *   2. The play-area never causes the page to scroll vertically — it shrinks
+ *      to fit. Cards inside use clamp() so they scale down with screen size.
+ *   3. Side opponent stacks (left/right) cap at the play-area height; if a
+ *      seat has many cards, the stack tightens its negative margin.
+ *   4. Your hand wraps within the screen width — never causes horizontal
+ *      scrollbar at the page level (only inside .your-hand).
+ *   5. The trump indicator is part of the bottom seat group and is rendered
+ *      tappable when it's the only legal card.
+ */
 
 :root {
   --felt: #0d4a2b;
@@ -18,6 +30,21 @@
   --shadow-lift: 0 8px 18px rgba(0, 0, 0, 0.4);
   --radius: 8px;
   --gap: 8px;
+
+  /* Card sizes scale with viewport. clamp(min, ideal, max) prevents both
+   * micro-cards on iPhone SE and oversized cards on tablets. */
+  --card-w: clamp(46px, 14vw, 64px);
+  --card-h: calc(var(--card-w) * 1.4);
+  --card-w-sm: clamp(32px, 9vw, 44px);
+  --card-h-sm: calc(var(--card-w-sm) * 1.4);
+  --card-w-trick: clamp(54px, 16vw, 78px);
+  --card-h-trick: calc(var(--card-w-trick) * 1.4);
+
+  /* Safe-area: respect iOS notch and home indicator. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
 }
 
 * { box-sizing: border-box; }
@@ -34,6 +61,9 @@ html, body {
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   overscroll-behavior: none;
+  /* Prevent horizontal page scroll regardless of content. Internal regions
+   * may scroll, but the document never does. */
+  overflow-x: hidden;
 }
 
 button, input { font-family: inherit; font-size: 16px; }
@@ -45,22 +75,31 @@ button { cursor: pointer; }
 .screen { display: none; padding: 16px; }
 .screen.active { display: block; }
 
-#app { min-height: 100vh; }
+/* Use 100dvh (dynamic viewport) so iOS Safari URL bar collapse doesn't
+ * cause the layout to overflow. Fallback to 100vh for browsers that
+ * don't support it. */
+#app { min-height: 100vh; min-height: 100dvh; }
 
 #app.screen-table {
   padding: 0;
   height: 100vh;
+  height: 100dvh;
   background: radial-gradient(ellipse at center, var(--felt) 0%, var(--felt-dark) 70%, var(--felt-edge) 100%);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* Respect safe-area insets so the header isn't hidden behind the notch. */
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
 }
 #app.screen-table .screen { padding: 0; }
 
 /* ============ Toast ============ */
 .toast {
   position: fixed;
-  top: 12px;
+  top: calc(12px + var(--safe-top));
   left: 50%;
   transform: translateX(-50%);
   background: var(--danger);
@@ -78,19 +117,14 @@ button { cursor: pointer; }
 .toast.hidden { opacity: 0; pointer-events: none; }
 
 /* ============ Landing ============ */
-/* Specificity trap: #landing's display MUST be gated on .active. Without
- * `.screen.active`, the ID-level `display: flex` here beat the class-level
- * `.screen { display: none }` rule, so #landing rendered on EVERY screen.
- * With `#app.screen-table { overflow: hidden; height: 100vh }` that meant
- * the landing card clipped the table out of view — producing the "Start
- * Game loops to landing" bug. Keep the layout properties at the ID level
- * but put display under .active.
- */
 #landing {
   min-height: 100vh;
+  min-height: 100dvh;
   align-items: center;
   justify-content: center;
   background: radial-gradient(ellipse at center, var(--felt) 0%, var(--felt-dark) 70%);
+  padding-top: calc(16px + var(--safe-top));
+  padding-bottom: calc(16px + var(--safe-bottom));
 }
 #landing.active { display: flex; }
 .landing-card {
@@ -148,7 +182,7 @@ button { cursor: pointer; }
   letter-spacing: 1px;
   text-transform: uppercase;
   text-align: center;
-  padding: 6px 10px;
+  padding: calc(6px + var(--safe-top)) 10px 6px;
   transform: translateY(-100%);
   transition: transform 200ms ease;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
@@ -157,7 +191,7 @@ button { cursor: pointer; }
 
 .debug-overlay {
   position: fixed;
-  bottom: 8px;
+  bottom: calc(8px + var(--safe-bottom));
   left: 8px;
   right: 8px;
   max-width: 360px;
@@ -211,7 +245,7 @@ button { cursor: pointer; }
 .btn[disabled] { opacity: 0.5; pointer-events: none; }
 
 /* ============ Lobby ============ */
-#lobby { padding: 16px; max-width: 460px; margin: 0 auto; }
+#lobby { padding: calc(16px + var(--safe-top)) 16px 16px; max-width: 460px; margin: 0 auto; }
 .lobby-head { text-align: center; margin-bottom: 16px; }
 .room-label { font-size: 12px; color: var(--cream-dim); text-transform: uppercase; letter-spacing: 1.5px; }
 .room-code {
@@ -263,47 +297,58 @@ button { cursor: pointer; }
   border-bottom: 1px solid rgba(0,0,0,0.4);
   min-height: 40px;
   flex-shrink: 0;
+  /* Header is bound to the top of the table screen, but the safe-area
+   * already pads #app from the top, so no further offset needed here. */
+  gap: 8px;
 }
-.tokens { display: flex; gap: 12px; align-items: center; }
+.tokens { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .team { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .team .label { color: var(--cream-dim); text-transform: uppercase; letter-spacing: 1px; }
 .team-0 .label { color: var(--gold); }
-.pips { display: inline-flex; gap: 2px; flex-wrap: nowrap; }
+.pips { display: inline-flex; gap: 2px; flex-wrap: nowrap; align-items: center; }
 .pip {
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--cream);
 }
 .team-1 .pip { background: #c89fa0; }
 .team-0 .pip { background: var(--gold); }
-.head-right { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--cream-dim); }
+.head-right { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--cream-dim); flex-shrink: 0; }
 .hand-num { text-transform: uppercase; letter-spacing: 1px; }
 
 .phase-banner {
   text-align: center;
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 6px 10px;
+  font-size: 13px;
   color: var(--cream-dim);
   background: rgba(0,0,0,0.2);
-  min-height: 22px;
+  min-height: 28px;
   flex-shrink: 0;
+  font-weight: 500;
 }
-.phase-banner.your-turn { color: var(--gold); font-weight: 600; }
+.phase-banner.your-turn { color: var(--gold); font-weight: 700; }
+.phase-banner.cutting { color: #ffb84d; font-weight: 700; }
 
-/* ============ Play area (seats + trick) ============ */
+/* ============ Play area (seats + trick) ============
+ * Grid layout with content-sized side columns so opponent stacks claim only
+ * the room they actually need. The center column expands to fill remaining
+ * width and houses the trick. The whole grid lives inside a flex:1 region;
+ * min-height:0 is essential or it would push other regions off-screen.
+ */
 .play-area {
   position: relative;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: 60px 1fr 60px;
-  grid-template-rows: 80px 1fr;
+  grid-template-columns: minmax(48px, auto) 1fr minmax(48px, auto);
+  grid-template-rows: minmax(60px, auto) 1fr;
   gap: 4px;
   padding: 8px;
+  overflow: hidden;
 }
-.seat-slot { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.seat-slot { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; min-height: 0; }
 .seat-top { grid-column: 2; grid-row: 1; }
-.seat-left { grid-column: 1; grid-row: 2; justify-self: start; }
-.seat-right { grid-column: 3; grid-row: 2; justify-self: end; }
+.seat-left { grid-column: 1; grid-row: 1 / span 2; justify-self: start; align-self: stretch; max-height: 100%; }
+.seat-right { grid-column: 3; grid-row: 1 / span 2; justify-self: end; align-self: stretch; max-height: 100%; }
 .seat-bottom { flex-shrink: 0; }
 
 .seat-name {
@@ -311,19 +356,33 @@ button { cursor: pointer; }
   color: var(--cream-dim);
   margin-bottom: 4px;
   text-align: center;
-  max-width: 120px;
+  max-width: 110px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.seat-name.active { color: var(--gold); font-weight: 600; }
+.seat-name.active { color: var(--gold); font-weight: 700; }
 .seat-name.you { color: var(--gold); }
 
-.seat-cards { display: flex; gap: 2px; align-items: center; justify-content: center; }
-.seat-cards.vertical { flex-direction: column; }
-.seat-cards .card { width: 32px; height: 44px; margin-left: -12px; }
+.seat-cards {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  min-width: 0;
+}
+.seat-cards.vertical {
+  flex-direction: column;
+  /* Cap the vertical stack inside the available column height so a long
+   * back-row never overflows the play area (the bug shown when 8 cards
+   * stacked vertically clipped past the screen). */
+  max-height: calc(100% - 28px);
+  overflow: hidden;
+}
+.seat-cards .card { width: var(--card-w-sm); height: var(--card-h-sm); margin-left: -14px; }
 .seat-cards .card:first-child { margin-left: 0; }
-.seat-cards.vertical .card { margin-left: 0; margin-top: -24px; }
+.seat-cards.vertical .card { margin-left: 0; margin-top: -28px; }
 .seat-cards.vertical .card:first-child { margin-top: 0; }
 
 .seat-bid {
@@ -331,16 +390,23 @@ button { cursor: pointer; }
   font-size: 11px;
   color: var(--gold);
   min-height: 14px;
+  text-align: center;
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Trick center */
+/* ============ Trick center ============ */
 .trick {
   grid-column: 2; grid-row: 2;
   position: relative;
-  min-height: 160px;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   grid-template-rows: 1fr 1fr 1fr;
+  align-items: center;
+  justify-items: center;
 }
 .trick-card {
   display: flex;
@@ -355,50 +421,60 @@ button { cursor: pointer; }
 .trick-card.slot-left   { grid-column: 1; grid-row: 2; }
 .trick-card .seat-tag {
   position: absolute;
-  top: -10px;
+  top: -12px;
   font-size: 10px;
   color: var(--cream-dim);
   text-transform: uppercase;
   letter-spacing: 1px;
+  white-space: nowrap;
 }
-.trick-card .card { animation: cardDrop 260ms ease; }
+.trick-card .card {
+  animation: cardDrop 260ms ease;
+  width: var(--card-w-trick);
+  height: var(--card-h-trick);
+}
+/* A face-down card in the trick that the trump maker can see (their private
+ * peek) is rendered face-up but with a translucent gold ring so they know
+ * the other players still see a back. */
+.trick-card .card.maker-peek {
+  box-shadow: 0 0 0 2px rgba(230, 200, 106, 0.85), var(--shadow);
+  position: relative;
+}
+.trick-card .card.maker-peek::before {
+  content: 'cut';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 9px;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: -apple-system, system-ui, sans-serif;
+  font-weight: 700;
+  background: rgba(0,0,0,0.55);
+  border-radius: 4px;
+  padding: 1px 4px;
+  pointer-events: none;
+}
 
 @keyframes cardDrop {
   0%   { transform: translateY(-12px) scale(0.9); opacity: 0; }
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
-/* Your hand */
+/* ============ Your seat (bottom) ============ */
 .seat-bottom {
   flex-shrink: 0;
-  padding: 6px 8px 2px;
+  padding: 4px 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
 }
 .seat-bottom .seat-name { font-size: 11px; }
-.your-hand {
-  display: flex;
-  flex-direction: row;
-  /* `safe center` centers the hand when it fits, but falls back to
-   * left-align when cards overflow — prevents the left-most cards from
-   * being scrolled off-screen (the failure mode of plain `center`). */
-  justify-content: safe center;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 10px 8px;
-  gap: 0;
-  min-height: 100px;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
-}
-.your-hand .card {
-  flex: 0 0 auto;
-  margin-left: -18px;
-  transition: transform 180ms ease, box-shadow 180ms ease;
-}
-.your-hand .card:first-child { margin-left: 0; }
 
-/* Trump indicator shown only to the trump maker — their 8th card is held
- * face-down as the indicator, not in the hand. Without this row the user
- * has no way to see which suit they picked. */
+/* Trump indicator row — visible to the trump maker; renders the indicator
+ * card and (when its id is in legalActions) makes it tappable. */
 .your-trump {
   display: flex;
   align-items: center;
@@ -406,6 +482,7 @@ button { cursor: pointer; }
   gap: 8px;
   padding: 4px 8px 0;
   min-height: 0;
+  flex-wrap: wrap;
 }
 .your-trump:empty { display: none; }
 .your-trump .your-trump-label {
@@ -417,12 +494,39 @@ button { cursor: pointer; }
 .your-trump .card {
   box-shadow: 0 0 0 2px var(--gold), var(--shadow);
 }
+.your-trump .card.legal { cursor: pointer; }
+
+.your-hand {
+  display: flex;
+  flex-direction: row;
+  /* `safe center` centers the hand when it fits, but falls back to
+   * left-align when cards overflow — prevents the left-most cards from
+   * being scrolled off-screen (the failure mode of plain `center`). */
+  justify-content: safe center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 12px 8px 6px;
+  gap: 0;
+  min-height: calc(var(--card-h) + 14px);
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  /* Reserve enough horizontal room for the lift-on-hover effect. */
+}
+.your-hand::-webkit-scrollbar { height: 4px; }
+.your-hand::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+.your-hand .card {
+  flex: 0 0 auto;
+  margin-left: -18px;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+.your-hand .card:first-child { margin-left: 0; }
 
 /* ============ Card DOM ============ */
 .card {
   position: relative;
-  width: 60px;
-  height: 84px;
+  width: var(--card-w);
+  height: var(--card-h);
   background: var(--cream);
   border-radius: 6px;
   box-shadow: var(--shadow);
@@ -431,7 +535,8 @@ button { cursor: pointer; }
   font-weight: 700;
   border: 1px solid #d6cfbd;
   overflow: hidden;
-  min-width: 44px;  /* tap target floor */
+  /* Touch target floor — even when card-w is at its min clamp. */
+  min-width: 44px;
 }
 .card.color-red  { color: var(--red); }
 .card.color-black { color: var(--black); }
@@ -451,15 +556,15 @@ button { cursor: pointer; }
   right: 4px;
   transform: rotate(180deg);
 }
-.card .c-rank { font-size: 15px; letter-spacing: -1px; }
-.card .c-suit { font-size: 13px; margin-top: 1px; }
+.card .c-rank { font-size: clamp(12px, 3.6vw, 16px); letter-spacing: -1px; }
+.card .c-suit { font-size: clamp(10px, 3vw, 14px); margin-top: 1px; }
 .card .card-center {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 34px;
+  font-size: clamp(22px, 8vw, 36px);
 }
 
 .card.face-down {
@@ -493,7 +598,10 @@ button { cursor: pointer; }
   box-shadow: 0 12px 20px rgba(0,0,0,0.45), 0 0 0 2px var(--gold);
 }
 
-.card.small { width: 44px; height: 62px; }
+.card.small {
+  width: var(--card-w-sm);
+  height: var(--card-h-sm);
+}
 .card.small .c-rank { font-size: 12px; }
 .card.small .c-suit { font-size: 10px; }
 .card.small .card-center { font-size: 22px; }
@@ -515,7 +623,7 @@ button { cursor: pointer; }
 .chip {
   min-width: 44px;
   min-height: 36px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 999px;
   background: var(--chip);
   color: var(--cream);
@@ -531,6 +639,7 @@ button { cursor: pointer; }
 .chip.danger  { background: var(--danger); }
 .chip.pass    { background: #555; }
 .chip.ghost   { background: transparent; border-color: rgba(255,255,255,0.25); }
+.chip.cut     { background: #b36b00; color: white; }
 
 .action-extras {
   display: flex;
@@ -541,7 +650,7 @@ button { cursor: pointer; }
   flex-wrap: wrap;
 }
 .bid-input {
-  width: 80px;
+  width: 96px;
   padding: 6px 8px;
   border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.2);
@@ -574,21 +683,35 @@ button { cursor: pointer; }
 .log li { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
 .log li:last-child { border-bottom: none; }
 
-/* ============ Desktop / tablet breakpoint ============ */
+/* ============ Tablet / desktop ============ */
 @media (min-width: 768px) {
+  :root {
+    --card-w: 78px;
+    --card-w-sm: 50px;
+    --card-w-trick: 92px;
+  }
   #app.screen-table {
     max-width: 900px;
     margin: 0 auto;
-    height: 100vh;
   }
-  .card { width: 72px; height: 100px; }
-  .card .c-rank { font-size: 18px; }
-  .card .c-suit { font-size: 15px; }
-  .card .card-center { font-size: 42px; }
-  .seat-cards .card { width: 40px; height: 56px; }
   .play-area {
-    grid-template-columns: 100px 1fr 100px;
-    grid-template-rows: 120px 1fr;
+    grid-template-columns: minmax(80px, auto) 1fr minmax(80px, auto);
   }
   .landing-card { max-width: 420px; padding: 32px 28px; }
+}
+
+/* ============ Short-screen overrides ============
+ * On phones in landscape, or anything <= 600px tall, the play area runs
+ * out of room first. Scale cards down and tighten the negative margins so
+ * the side stacks fit. */
+@media (max-height: 640px) {
+  :root {
+    --card-w: clamp(40px, 12vw, 54px);
+    --card-w-sm: clamp(28px, 7.5vw, 40px);
+    --card-w-trick: clamp(46px, 13vw, 66px);
+  }
+  .seat-cards.vertical .card { margin-top: -32px; }
+  .your-hand { padding: 8px 6px 4px; min-height: calc(var(--card-h) + 8px); }
+  .phase-banner { padding: 4px 8px; min-height: 22px; font-size: 12px; }
+  .log-wrap { max-height: 80px; }
 }

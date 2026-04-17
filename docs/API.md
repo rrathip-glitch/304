@@ -63,18 +63,41 @@ Not implemented in v1.
 See `docs/ARCHITECTURE.md#client-view-filtering`. Key fields:
 
 - `yourSeat`: which seat you are (0–3)
-- `yourHand`: array of Card
-- `handCounts`: number of cards per seat
+- `yourHand`: array of Card (excludes the trump indicator if you're the
+  trump maker — the indicator is in `trumpIndicator` instead)
+- `handCounts`: number of cards per seat (length-4 array)
 - `phase`: current game phase
 - `currentPlayer`: whose turn it is (may equal yourSeat)
 - `legalActions`: array of action templates you can currently perform
-  (server-side computed; makes client UI trivial)
+  (server-side computed; makes client UI trivial). For `playCard`, the
+  `cardIds` list **includes the trump indicator id** when the maker may
+  legally play it as a face-down cut, so the client can render the
+  indicator card itself as tappable.
 - `trumpSuit` / `trumpIndicator`: null unless revealed or you're trump maker
-- `currentTrick`: cards played this trick, with face-down ones masked if not
-  visible to you
+- `currentTrick`: cards played this trick, with face-down filtering applied
+  per-seat (see *Cutting visibility* below)
 - `tokens`: `[team0, team1]`
 - `tricksWon`: per-team count
 - `log`: recent events (last 10)
+- `cutResolved`: `true` for one frame after a face-down trump was revealed
+  this trick. Cleared when the next trick begins. Drives the "CUT!" banner.
+- `cutWinnerSeat`: the seat that wins the trick when `cutResolved` is true
+  (i.e., the cutter); `null` otherwise.
+
+### Cutting visibility (`currentTrick` per-seat filter)
+
+Each entry in `currentTrick` is filtered before send. Three shapes are
+possible per played card, depending on who's looking:
+
+| Recipient | Card was face-up | Card was face-down (own play) | Card was face-down (someone else) |
+|---|---|---|---|
+| The cutter | full `{seat, card, faceDown:false, ...}` | full `{seat, card, faceDown:true, ...}` (you tapped it) | (n/a) |
+| Trump maker | full | full | `{seat, card, faceDown:true, isTrumpIndicator, makerPeek:true}` |
+| Anyone else | full | full | `{seat, faceDown:true, hidden:true}` (no `card` field) |
+
+After `state.trumpRevealed === true` (a cut was successful, or open was
+declared, or the bid ≥ 250 auto-open fired after trick 1), every recipient
+sees the unfiltered `{seat, card, faceDown, isTrumpIndicator}` form.
 
 ## Legal Actions
 

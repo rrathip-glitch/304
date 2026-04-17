@@ -6,8 +6,8 @@
 ## Repository
 
 - Repo: `rrathip-glitch/304`
-- Active branch: **`claude/mobile-game-development-GifG7`**
-- Clone: `git clone <repo-url> && git checkout claude/mobile-game-development-GifG7`
+- Active branch: **`claude/fix-layout-cutting-mechanic-kepuN`** (v2.0.0)
+- Clone: `git clone <repo-url> && git checkout claude/fix-layout-cutting-mechanic-kepuN`
 
 ## Project in One Paragraph
 
@@ -89,6 +89,57 @@ Scopes: `docs`, `engine`, `ai`, `server`, `client`, `deploy`, `fix`, `style`.
 
 ## Current Status
 
+**v2.0.0 — Session 2026-04-17, Claude Opus 4.7**
+
+Shipped:
+- **Cutting mechanic** with full UX (banner prompt, cutter seat tag,
+  trump-maker private peek with `makerPeek` view flag, "CUT!" reveal,
+  indicator returns to maker's hand on trump cut, cutting team leads
+  next trick).
+- **Trump indicator selectable** — rendered as a tappable card in the
+  `YOUR TRUMP` row when the engine lists its id as legal. Fixes the
+  dead-screen failure mode shown in the user-supplied screenshot.
+- **Responsive layout overhaul** — `clamp()` card sizes, `100dvh`,
+  `env(safe-area-inset-*)`, vertical-stack overflow caps, short-screen
+  media query. Resolves all five layout regressions from the screenshots.
+- **Standard semver** versioning (`2.0.0`). `package.json` is the source
+  of truth; `server.js` reads it for `/version`; `index.html` and
+  `client.js` reference it directly.
+- **Regression suite** — `scripts/layout-smoke.js` (22 structural
+  assertions) + `scripts/cut-test.js` (24 engine assertions across 3 cut
+  scenarios). All 5 test scripts green.
+
+Engine changes:
+- `legalCardIds` now includes the trump indicator id when the maker
+  can't follow suit (cut path).
+- `viewFor.currentTrick` filter exposes face-down cards face-up to the
+  trump maker with `makerPeek: true`; everyone else still sees `hidden`.
+- `resolveTrick` sets `cutResolved: true` for one frame on a successful
+  cut; `handleInspect` clears it.
+
+UI changes:
+- Phase banner shows the cut prompt + the "CUT!" reveal in distinct
+  colors (amber for prompt, gold for reveal).
+- Trump maker's view of a cut shows a face-up card with a gold ring +
+  "cut" badge.
+- Other players' view of a cut shows a back with the seat tag prefixed
+  "cut — <name>".
+
+Verification (all green):
+- `node scripts/layout-smoke.js` → 22 checks pass.
+- `node scripts/cut-test.js` → 24 assertions across 3 scenarios pass.
+- `node scripts/smoke.js` → full match completes; token invariant holds.
+- `node scripts/soak.js 5` → 5 matches; no deadlocks; tokens always = 22.
+- `node scripts/e2e.js` → server boots, room created, views flow.
+
+Next-up priority:
+- Visual snapshot harness (Playwright) at the 5 reference viewports.
+- Invite-link flow for 2nd human (`?room=ABCDEF&name=Dad`).
+- Polish: animations, sound effects.
+- PCC 3-player mechanics.
+
+---
+
 **Session `0136BhfwMDsMM6tHKFzrc2WJ` (2026-04-16, Claude Opus 4.7)**
 
 Shipped:
@@ -147,3 +198,18 @@ Next-up priority:
 - **[2026-04-16]** The user's 304 has two important house variants vs
   pagat: (1) display points are /10 of classic (J=3 not 30); (2) winning
   all 8 tricks gives **5 tokens** automatically. Don't re-derive these.
+- **[2026-04-17]** The view filter for `currentTrick` is now THREE
+  shapes per played card (cutter / trump-maker / everyone-else). See the
+  table in `docs/API.md#cutting-visibility-currenttrick-per-seat-filter`.
+  Any change to that filter MUST be matched by an update to the
+  `scripts/cut-test.js` `makerPeek` and `hidden` assertions.
+- **[2026-04-17]** When you bump the version, update FOUR places
+  in lockstep: `package.json`, `public/index.html` (both the build marker
+  and the `?v=` query strings), and `public/client.js` (the `BUILD`
+  constant). Then run `node scripts/layout-smoke.js` — it will fail if
+  any one of the four falls out of sync.
+- **[2026-04-17]** `scripts/layout-smoke.js` is *static analysis*, not
+  pixel-rendering. It proves the CSS rule that prevents a regression
+  exists — that's enough for the kind of bugs we've seen (missing
+  safe-area, missing clamp, missing overflow cap). For pixel-perfect
+  diffs, add a Playwright suite (next-up item).

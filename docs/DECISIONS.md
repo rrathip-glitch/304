@@ -123,5 +123,89 @@ within that round.
 
 ---
 
+## 2026-04-17 — Semver release tags (v2.0.0)
+
+**Decision:** Drop the `hand-center-N` codename pattern for build markers
+and ship to standard semver. `package.json#version` is the single source of
+truth; `server.js` reads it for `/version`, `public/index.html` references
+it via the `?v=` cache-bust query, and `public/client.js` has it in the
+`BUILD` constant.
+
+**Rationale:** Codenames buried which build was newer (`hand-center-5` vs
+`emit-gate-3` — which one shipped first?). Semver makes the order obvious,
+makes upgrade/downgrade trivial in `git log`, and matches what every
+engineer sees in npm / GitHub releases. The version was bumped to
+**2.0.0** (major) because v2 is the first release with the cutting UX,
+the responsive layout overhaul, and the trump-indicator-tappable fix.
+
+---
+
+## 2026-04-17 — Trump-maker private peek on face-down cuts
+
+**Decision:** Add `makerPeek: true` to the `currentTrick` view entry the
+server sends to the trump maker for any face-down card from another seat.
+The card data is real; the flag tells the client to render the gold-ring
+"others see a back" affordance instead of a vanilla face-up.
+
+**Alternatives:**
+- Withhold the card from the maker until the inspect phase (matches v1).
+- Send the card data but no flag, letting the maker see it indistinguishably
+  from a face-up play.
+
+**Rationale:** Pagat's canonical rule is that the trump maker may inspect
+face-down cards "at the end of the trick". In a real game, the maker
+naturally watches the cards as they're played — the privacy is between
+the maker and *the other players*, not between the maker and the rules.
+Surfacing the peek live is a strict UX improvement and matches what
+in-person players already do mentally. The `makerPeek` flag preserves the
+"others can't see this" social contract visually.
+
+---
+
+## 2026-04-17 — Trump indicator is included in `legalCardIds` when can't follow
+
+**Decision:** When the trump maker is to follow a non-trump-led trick in a
+closed game and can't follow suit, the trump indicator's id is included in
+the `playCard.cardIds` array (alongside any non-indicator hand cards).
+
+**Alternatives:**
+- Keep v1 behavior: indicator excluded from legalCardIds; rely on the
+  player typing in or otherwise specifying it.
+- Include it always (even when following suit), letting the engine reject
+  it.
+
+**Rationale:** The pagat rule explicitly allows the indicator to be played
+face-down to cut. In v1 the indicator was excluded from the legal list,
+which meant the client couldn't render it as tappable — and the player
+literally had no UI affordance to cut with the indicator. The screenshot
+labelled "Playing tricks — your turn" with only the indicator left was
+the dead-screen failure mode. Including the id in legalCardIds is
+strictly additive (the engine still validates the play), and unlocks the
+tappable-indicator UX.
+
+---
+
+## 2026-04-17 — Responsive layout: `clamp()` + `dvh` + safe-area
+
+**Decision:** All card sizes use `clamp(min, vw-based, max)`. The table
+screen uses `100dvh` with `env(safe-area-inset-*)` padding on all four
+sides. Side opponent stacks are capped with `max-height: calc(100% - 28px)`
+and `overflow: hidden`.
+
+**Alternatives:**
+- Keep fixed `px` card sizes with breakpoints at 375 / 768 / 1024 (v1).
+- JavaScript-driven layout that measures the viewport and resizes cards.
+
+**Rationale:** Three of the user's screenshots showed concrete failures
+(header behind notch; 8-card vertical stack overflowing; cards extending
+past the screen edge). Each was a missing CSS rule, not a JS bug. `clamp`
++ `dvh` fixes all three and works without media-query gymnastics across
+the iPhone SE (smallest target) → iPad mini (largest mobile-like) range.
+Static analysis (`scripts/layout-smoke.js`) now asserts each rule's
+presence, so a regression that drops the safe-area or the clamp will
+fail CI before it ships.
+
+---
+
 *Append new entries below this line. Do not modify prior entries — if a
 decision is reversed, add a new entry that references and supersedes it.*

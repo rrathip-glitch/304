@@ -124,14 +124,34 @@ type PlayerView = GameState & {
   handCounts: [number, number, number, number],
   trumpIndicator: Card|null,                  // set only if you are trump maker
                                               // or it has been revealed
-  currentTrick: PlayedCard[]                  // face-down cards show {hidden:true}
-                                              // (except to the trump maker who can
-                                              //  inspect at trick end)
+  currentTrick: PlayedCard[]                  // face-down filter — see below
+  cutResolved: boolean,                       // true the frame a trump cut wins
+  cutWinnerSeat: 0|1|2|3|null,                // the cutter when cutResolved
 };
 ```
 
 Sensitive fields (`hands`, `trumpIndicator` when closed) are stripped before
 broadcast.
+
+### Cutting (face-down play) — visibility table
+
+When a player can't follow suit in a closed game, they tap a card and the
+client tags it `faceDown: true`. The server-side view filter then exposes
+that card differently to each seat:
+
+- The **cutter** sees their own play (with the card data).
+- The **trump maker** sees a `{ ...card, makerPeek: true }` shape — the
+  card is real (so the maker can adjudicate cuts privately) but the
+  `makerPeek` flag tells the UI to render the gold-ringed "the others see
+  a back" affordance instead of a vanilla face-up.
+- **Everyone else** sees `{ seat, faceDown: true, hidden: true }` — no
+  `card` field at all (no way to leak rank/suit through devtools).
+
+When a face-down card is a trump, `resolveTrick` flips `trumpRevealed +
+isOpenTrump` to true, returns the indicator to the maker's hand, sets
+`cutResolved: true` for one frame, and lets the existing winner-leads-next
+rule give the cutter the next lead. From this trick onward every player
+sees the full `currentTrick` shape — the game is now open.
 
 ## Turn Direction
 
@@ -153,20 +173,45 @@ First leader: `nextPlayer(dealer)`.
    - All humans have disconnected for > 10 minutes, or
    - Host ends the game.
 
-## Mobile UI Layout (target 375×812)
+## Mobile UI Layout (responsive, ~320–1024 wide)
 
 ```
 ┌─────────────────────────────┐
-│ header: tokens, room code   │  (40px)
+│ ▲ safe-area-inset-top       │  (iPhone notch / Android status bar)
 ├─────────────────────────────┤
-│        partner (top)        │  (80px)
-│                             │
-│ L-opp        trick        R-opp  (240px center)
-│                             │
-│       your hand (bottom)    │  (180px)
+│ header: tokens · hand · room│  (≥40px, never overlapped)
 ├─────────────────────────────┤
-│ action bar: bid/play/open   │  (80px)
+│ phase banner / cut prompt   │  (28px; amber when "you can cut")
+├─────────────────────────────┤
+│ ┌──┐    partner (top)   ┌──┐
+│ │L │     trick center   │R │ (play-area: flex:1, overflow:hidden)
+│ │op│     2×2 cards      │op│ (side stacks cap at column height)
+│ │p │                    │p │
+│ └──┘                    └──┘
+├─────────────────────────────┤
+│ YOUR TRUMP  [card]          │ (only the maker sees this row)
+│ your hand: ♠ ♥ ♦ ♣          │ (safe-center; min 44px tap target)
+├─────────────────────────────┤
+│ action bar: bid / play hint │  (≥60px)
+├─────────────────────────────┤
+│ ▼ safe-area-inset-bottom    │
 └─────────────────────────────┘
 ```
+
+### Layout invariants (enforced by `scripts/layout-smoke.js`)
+
+1. `#app.screen-table` claims `100dvh` (dynamic viewport) so iOS Safari's
+   URL-bar collapse never causes overflow.
+2. `padding-top: var(--safe-top)` etc. on the table screen so the header is
+   never hidden behind the notch / camera island.
+3. Card sizes are `clamp(min, ideal-vw, max)` so the same DOM works on a
+   320px-wide phone and a 1024px tablet without media queries.
+4. Side-opponent vertical stacks set `max-height: calc(100% - 28px)` and
+   `overflow: hidden` so an 8-card back row never extends past the play
+   area (the failure mode of the v1 8-card-bidding screen).
+5. `body { overflow-x: hidden }` makes a horizontal page scroll
+   structurally impossible.
+6. A `@media (max-height: 640px)` override re-clamps card sizes for
+   landscape phones / iPhone SE.
 
 Cards are CSS-drawn (not images) for fast paint and infinite scalability.

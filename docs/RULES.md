@@ -101,17 +101,30 @@ Household variant source: user messages dated 2026-04-16 (see DECISIONS.md).
 
 ### Closed (default)
 - Trump indicator stays face-down.
-- When a player cannot follow suit, they play a card **face-down**.
-  Other players (except the trump maker) do not see it.
-- **At end of trick**, trump maker privately inspects any face-down cards:
-  - If **none are trumps**: face-down cards stay face-down permanently;
-    trick is won by the highest card of the suit led.
-  - If **any card is a trump**: all face-down cards are revealed, the
-    trump indicator is revealed (added to trump maker's hand if not the
-    played card), and the trick is won by the highest trump.
+- When a player cannot follow suit, they **may guess** the closed trump
+  suit by playing a card of the suit they think trump is. The card is
+  played **face-down** ("cutting").
+- **Visibility** while the trick is in progress:
+  - **The cutter** sees their own card (it's their tap).
+  - **The trump maker** privately sees every face-down card face-up. The
+    UI marks them with a tint + "cut" badge so the maker knows the others
+    still see backs.
+  - **All other players** see only a face-down back. The seat tag in the
+    trick area is prefixed with "cut — <name>" so everyone knows the
+    intent, but the rank/suit is hidden.
+- **At end of trick**:
+  - If **no face-down card was the trump suit**: the face-downs stay
+    face-down permanently. Trick is won by the highest card of the suit
+    led.
+  - If **any face-down card was the trump suit**: the trump indicator is
+    revealed (returned to the trump maker's hand) and every other
+    face-down card is also flipped face-up. The cutter's team wins the
+    trick. The cutter leads the next trick. The game becomes **open**
+    for the remainder of the hand.
   - **Trump maker's own face-down non-trump discard** remains hidden even
     after a reveal — it stays a discard.
-- Once trump is revealed, the game is **open** for all remaining tricks.
+- Multiple players can cut on the same trick. The highest trump played
+  face-down still wins per normal trump-card precedence.
 
 ### Open
 - The trump maker may **declare open** before the first card is led.

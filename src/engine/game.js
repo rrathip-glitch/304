@@ -60,6 +60,7 @@ function createGame(roomId = '') {
     lastTrick: null,
     pendingSecondBatch: null,
     dealtFirstBatch: false,
+    cutResolved: false,
   };
 }
 
@@ -101,6 +102,7 @@ function startHand(state, rng = Math.random) {
   state.tricksPlayed = 0;
   state.lastTrick = null;
   state.dealtFirstBatch = true;
+  state.cutResolved = false;
 
   const deck = cards.shuffle(cards.makeDeck(), rng);
   state.pendingSecondBatch = deck.slice(16);
@@ -449,12 +451,16 @@ function exhaustedTrumpCheck(state, seat, card) {
 }
 
 function resolveTrick(state) {
+  // Reset the per-trick cut flag — only set if THIS trick's resolution
+  // exposed a cut. (The previous trick's flag would otherwise linger.)
+  state.cutResolved = false;
   const inClosed = !state.isOpenTrump && !state.trumpRevealed;
   if (inClosed) {
     const anyFaceDownTrump = state.currentTrick.some((p) => p.faceDown && p.card.suit === state.trumpSuit);
     if (anyFaceDownTrump) {
       state.trumpRevealed = true;
       state.isOpenTrump = true;
+      state.cutResolved = true;
       state.currentTrick = state.currentTrick.map((p) => {
         if (p.seat === state.trumpMaker && p.faceDown && p.card.suit !== state.trumpSuit) {
           return p;
@@ -465,7 +471,7 @@ function resolveTrick(state) {
         state.hands[state.trumpMaker].push(state.trumpIndicator);
         state.trumpIndicator = null;
       }
-      log(state, `Face-down trump revealed. Trump is ${state.trumpSuit}.`);
+      log(state, `Cut! Trump suit (${state.trumpSuit}) revealed.`);
     }
   }
 
@@ -510,6 +516,7 @@ function resolveTrick(state) {
 function handleInspect(state, seat, action) {
   if (action.type !== 'continue') return fail('expected continue');
   state.currentTrick = [];
+  state.cutResolved = false;
   state.phase = PHASES.PLAY;
   return { ok: true };
 }
@@ -642,9 +649,14 @@ function legalCardIds(state, seat) {
   if (following) {
     return hand.filter((c) => c.suit === leadSuit && c.id !== indicatorId).map((c) => c.id);
   }
-  // Can't follow suit: any card (indicator excluded unless it's the only card / trick 8).
-  const nonIndicator = hand.filter((c) => c.id !== indicatorId).map((c) => c.id);
-  if (nonIndicator.length > 0) return nonIndicator;
+  // Can't follow suit. Any non-indicator hand card is legal (face-down cut
+  // in closed games is enforced inside handlePlay). The trump maker may also
+  // play the indicator face-down to cut — include it explicitly here so the
+  // client can render it as a tappable, legal card (this fixes the stuck UI
+  // where the maker held only the indicator and had no tap target).
+  const ids = hand.filter((c) => c.id !== indicatorId).map((c) => c.id);
+  if (hasIndicator) ids.push(indicatorId);
+  if (ids.length > 0) return ids;
   return hand.map((c) => c.id);
 }
 
@@ -675,11 +687,28 @@ function viewFor(state, seat) {
     tricksWon: state.tricksWon.slice(),
     tricksPlayed: state.tricksPlayed,
     currentTrick: state.currentTrick.map((p) => {
-      if (p.faceDown && p.seat !== seat && seat !== state.trumpMaker && !state.trumpRevealed) {
+      // Face-down filtering for cutting:
+      //  • The cutter sees their own card (it's their tap).
+      //  • The trump maker sees ALL face-down cards face-up — this is their
+      //    private peek that lets them adjudicate cuts (we mark them with
+      //    `makerPeek` so the UI can render a tinted "the others see a back"
+      //    affordance instead of a vanilla face-up).
+      //  • Once trump has been revealed (a trump was cut OR open declared),
+      //    every player sees every card.
+      //  • Everyone else sees a back.
+      if (p.faceDown && p.seat !== seat && !state.trumpRevealed) {
+        if (seat === state.trumpMaker) {
+          return { seat: p.seat, card: p.card, faceDown: true, isTrumpIndicator: p.isTrumpIndicator, makerPeek: true };
+        }
         return { seat: p.seat, faceDown: true, hidden: true };
       }
       return { seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator };
     }),
+    // True iff a face-down trump was just resolved this trick (informs the
+    // client to play a "Cut!" reveal animation and add the suit announcement
+    // to the banner). Cleared on the next trick's first play.
+    cutResolved: !!state.cutResolved,
+    cutWinnerSeat: state.cutResolved ? state.trickLeader : null,
     lastTrick: state.lastTrick ? state.lastTrick.map((p) => ({ seat: p.seat, card: p.card, faceDown: p.faceDown, isTrumpIndicator: p.isTrumpIndicator })) : null,
     legalActions: state.currentPlayer === seat || state.currentBidder === seat || (state.phase === PHASES.TRUMP_PICK1 && seat === state.trumpMaker) || (state.phase === PHASES.TRUMP_PICK2 && seat === state.trumpMaker) || (state.phase === PHASES.OPEN_CHOICE && seat === state.trumpMaker) || state.phase === PHASES.HAND_END ? legalActions(state, seat) : [],
   };

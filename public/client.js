@@ -17,7 +17,9 @@
   };
 
   // ---- Build stamp & debug overlay -----------------------------------------
-  const BUILD = 'hand-center-5';
+  // Standard semver. Bumped on every shipped build so the in-app diagnostics
+  // overlay (and /version endpoint) clearly identifies which client is live.
+  const BUILD = '2.0.0';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -447,16 +449,28 @@
     $('#hand-num').textContent = 'Hand ' + (v.handNumber || 1);
     renderTokens(v.tokens || [11, 11]);
 
-    // Phase banner — shows the phase plus whose turn
+    // Phase banner — shows the phase plus whose turn. Adds a "you can cut"
+    // hint when it's your turn and you can't follow suit in a closed game,
+    // and a "CUT!" announcement when a face-down trump was just revealed.
     const phase = v.phase || '';
     const isYourTurn = v.currentPlayer === state.yourSeat;
     const phaseEl = $('#phase-banner');
-    const phaseTxt = PHASE_LABELS[phase] || phase;
+    let phaseTxt = PHASE_LABELS[phase] || phase;
     const turnTxt = v.currentPlayer != null
       ? (isYourTurn ? ' — your turn' : ' — ' + nameOfSeat(v.currentPlayer) + '\'s turn')
       : '';
-    phaseEl.textContent = phaseTxt + turnTxt;
-    phaseEl.classList.toggle('your-turn', isYourTurn);
+    let cutting = false;
+    if (v.cutResolved && v.trumpSuit) {
+      const winnerName = v.cutWinnerSeat != null ? nameOfSeat(v.cutWinnerSeat) : 'cutter';
+      phaseTxt = 'CUT! Trump is ' + suitName(v.trumpSuit) + ' — ' + winnerName + ' takes the trick';
+      cutting = true;
+    } else if (phase === 'play' && isYourTurn && cannotFollowSuit(v)) {
+      phaseTxt = 'You can\'t follow suit — tap a card to cut (face-down)';
+      cutting = true;
+    }
+    phaseEl.textContent = phaseTxt + (cutting ? '' : turnTxt);
+    phaseEl.classList.toggle('your-turn', isYourTurn && !cutting);
+    phaseEl.classList.toggle('cutting', cutting);
 
     // Seats
     renderOpponentSeats(v);
@@ -554,9 +568,10 @@
   }
 
   // Render the trump indicator card to the trump maker so they can see
-  // which card they picked. The server only sends `trumpIndicator` in the
-  // view if the recipient is the trump maker (or it's already been
-  // revealed), so we don't need extra client-side gating.
+  // which card they picked. If the indicator id is in the legal-action set
+  // (trick-8 forced lead, or the maker's own face-down cut), the card is
+  // rendered tappable here — this fixes the dead-screen bug where the maker
+  // had only the indicator left and the hand row was empty.
   function renderYourTrump(v) {
     const el = $('#your-trump');
     if (!el) return;
@@ -567,7 +582,14 @@
     label.className = 'your-trump-label';
     label.textContent = v.trumpRevealed ? 'Trump (open)' : 'Your trump';
     el.appendChild(label);
-    const cardEl = Cards.render(v.trumpIndicator, { small: true });
+
+    const legalIds = legalCardIdsFromView(v);
+    const isTappable = legalIds.has(v.trumpIndicator.id);
+    const cardEl = Cards.render(v.trumpIndicator, {
+      small: true,
+      legal: isTappable,
+      onClick: isTappable ? (card) => onCardTap(card, true) : null,
+    });
     el.appendChild(cardEl);
   }
 
@@ -585,8 +607,11 @@
   function renderHand(hand, legalIds) {
     const el = $('#your-hand');
     el.innerHTML = '';
-    // Sort hand by suit then rank for stable display
-    const sorted = hand.slice().sort(cardSortCompare);
+    // Sort hand by suit then rank for stable display. The trump indicator
+    // (if held) is excluded — it's rendered separately in #your-trump.
+    const v = state.view;
+    const indicatorId = (v && v.trumpIndicator && v.trumpMaker === state.yourSeat) ? v.trumpIndicator.id : null;
+    const sorted = hand.slice().filter((c) => c.id !== indicatorId).sort(cardSortCompare);
     for (const c of sorted) {
       const legal = legalIds.has(c.id);
       const cardEl = Cards.render(c, {
@@ -655,14 +680,30 @@
       slot.innerHTML = '';
       const tag = document.createElement('div');
       tag.className = 'seat-tag';
-      tag.textContent = nameOfSeat(p.seat);
+      // If the play is face-down (a cut), mark the tag so every player sees
+      // "CUT — Name" — communicates the intent of the face-down play even
+      // before reveal. The card itself stays a back to non-privileged seats.
+      if (p.faceDown && !p.isTrumpIndicator) {
+        tag.textContent = 'cut — ' + nameOfSeat(p.seat);
+      } else {
+        tag.textContent = nameOfSeat(p.seat);
+      }
       slot.appendChild(tag);
 
       const isFaceDown = !!(p.faceDown || p.hidden);
       let cardEl;
       if (isFaceDown && !p.card) {
+        // True opponent-face-down: no card data, just a back.
         cardEl = Cards.renderBack();
+      } else if (isFaceDown && p.makerPeek) {
+        // Trump maker's private peek: render face-up with the gold ring so
+        // they know the other players still see a back.
+        cardEl = Cards.render(p.card, { small: false });
+        cardEl.classList.add('maker-peek');
       } else if (isFaceDown) {
+        // Our own cut: we know the card we played; show a back (the public
+        // state) so the UI matches what others see. The log entry already
+        // confirms which card it was.
         cardEl = Cards.renderBack();
       } else {
         cardEl = Cards.render(p.card, { small: false });
@@ -787,6 +828,21 @@
 
   function displayPoints(internal) {
     return String(internal / 10);
+  }
+
+  const SUIT_NAMES = { S: 'Spades', H: 'Hearts', D: 'Diamonds', C: 'Clubs' };
+  function suitName(s) { return SUIT_NAMES[s] || s; }
+
+  // True iff it's the player's turn to follow a non-empty trick AND they
+  // hold no card of the lead suit (i.e., must play face-down to cut).
+  function cannotFollowSuit(v) {
+    if (!v || !Array.isArray(v.currentTrick) || v.currentTrick.length === 0) return false;
+    if (v.isOpenTrump || v.trumpRevealed) return false;
+    const lead = v.currentTrick[0];
+    const leadSuit = lead && lead.card ? lead.card.suit : null;
+    if (!leadSuit) return false;
+    const hand = v.yourHand || [];
+    return !hand.some((c) => c.suit === leadSuit);
   }
 
   // Expose a tiny debug hook without leaking the whole closure.

@@ -6,7 +6,7 @@
 ## Done
 
 - [x] Project skeleton (`package.json`, `.gitignore`)
-- [x] Documentation suite (SOUL, RULES, ARCHITECTURE, API, TASKS, DECISIONS)
+- [x] Documentation suite (SOUL, RULES, ARCHITECTURE, API, TASKS, DECISIONS, TESTING)
 - [x] `src/engine/cards.js` — deck, ranks, points (integer ×10 internal),
       compare, winningIndex, legalCards, displayPoints
 - [x] `src/engine/game.js` — full state machine (bid4 → trump_pick1 → bid8 →
@@ -16,69 +16,78 @@
 - [x] `public/` — vanilla HTML/CSS/JS client (landing, lobby, table)
 - [x] `Dockerfile`, `railway.json`, `.dockerignore` — Railway deployment
 
+## Done in v2.0.0 (2026-04-17)
+
+- [x] **Cutting mechanic** — explicit UX (banner prompt, cutter seat tag,
+      maker private peek, "CUT!" reveal, indicator returns to hand,
+      cutting team leads next trick).
+- [x] **Trump indicator selectable** — rendered as a tappable card in the
+      `YOUR TRUMP` row when its id appears in `legalActions.cardIds`.
+      Fixes the dead-screen failure mode where the maker had only the
+      indicator left.
+- [x] **Responsive layout** — `clamp()` card sizes, `100dvh`,
+      `env(safe-area-inset-*)`, vertical-stack overflow cap, short-screen
+      media query. Resolves all five layout regressions visible in the
+      reference screenshots.
+- [x] **Standard semver** — `2.0.0`. Single source of truth in
+      `package.json`; `server.js`, `index.html`, and `client.js` read or
+      reference it.
+- [x] **Regression tests** — `scripts/layout-smoke.js` (22 assertions on
+      CSS/HTML/JS structure), `scripts/cut-test.js` (24 engine assertions
+      across three cut scenarios). All five test scripts green.
+
 ## Next up
 
 **Start here if you are a fresh instance:**
 
-1. **Interactive play-through in a real mobile browser.** `npm install`,
-   `npm start`, open `http://<laptop-ip>:3000` on a phone. Create room,
-   add 3 AIs, play a full hand. Verify no view-leak bugs (face-down cards
-   leaking rank/suit to opponents, trump indicator visible to non-makers).
-2. **Deploy to Railway.** Push branch, create Railway project, confirm
-   healthcheck passes. See `docs/DEPLOYMENT.md`.
-3. **Invite-link flow for 2nd human.** Today the 2nd player can join by
-   typing the room code. Add a share button that copies a URL like
-   `https://<domain>/?room=ABCDEF&name=Dad` — client auto-joins.
-4. **Polish:** card deal animation, trick collection animation, trump reveal
-   flourish, sound effects (card play, trick won, token transfer).
-5. **PCC (Partner Close Caps)** 3-player mechanics — currently deferred;
+1. **Visual diff harness.** layout-smoke proves the *rules* exist; a
+   Playwright/Puppeteer suite that snapshots the table at each reference
+   viewport (iPhone SE, 14 Pro, Pixel 7, iPad mini, landscape phone) would
+   catch *visual* regressions the same way. ~50 LOC + a single
+   devDependency.
+2. **Invite-link flow for 2nd human.** Add a share button on the lobby
+   that copies `https://<domain>/?room=ABCDEF&name=Dad`; client
+   auto-joins on load.
+3. **Polish:** card deal animation, trick collection animation, sound
+   effects (card play, trick won, token transfer).
+4. **PCC (Partner Close Caps)** 3-player mechanics — currently deferred;
    see `docs/RULES.md#partner-close-caps-pcc`.
 
 ## Verification status
 
-Automated tests (run from repo root):
-- `node scripts/smoke.js` — single-AI-match walkthrough.
-- `node scripts/soak.js 5` — 5 full matches to completion; checks token
-  invariant (always sums to 22).
-- `node scripts/e2e.js` — boots server, connects socket, creates room,
-  adds AIs, starts game, verifies views flow.
+Run the full test suite from the repo root:
 
-All passing as of commit 2b9e265 (2026-04-16).
+```bash
+node scripts/layout-smoke.js    # 22 structural assertions
+node scripts/cut-test.js        # 24 engine assertions, 3 scenarios
+node scripts/smoke.js           # one full 4-AI match
+node scripts/soak.js 5          # 5 matches; token invariant
+node scripts/e2e.js             # boots server, drives socket
+```
 
-## Backlog (not blocking v1 playable)
+All five passing as of v2.0.0 (commit on `claude/fix-layout-cutting-mechanic-kepuN`).
+
+## Backlog (not blocking)
 
 - Partner Close Caps full mechanics (bid + 3-player hand).
 - Spoilt Trumps auto-detection & declaration UI.
-- Caps timing penalties (Wrong Caps -2, Losing after Caps -5). Currently we
-  use the "all 8 tricks = 5 tokens automatic" house rule instead.
+- Caps timing penalties (Wrong Caps -2, Losing after Caps -5). House rule
+  "all 8 tricks = 5 tokens automatic" is the v1+v2 substitute.
 - Reconnection persistence across server restart (needs a KV store).
-- Sound effects (card play, trick won, token transfer).
+- Visual snapshot harness (Playwright).
 - Animations: dealing, card flip on reveal, token slide.
-- Chat box for humans to message each other.
+- Chat box for humans.
 - i18n (Sinhala, Tamil).
-
-## Known rule gaps still to resolve with user
-
-- In a closed game, if a player's only unplayable option is the trump
-  indicator on a non-trump-led trick (they have no cards of the lead suit
-  and no non-indicator cards), can they play the indicator face-down to cut
-  even though there's no trump played? Pagat says yes (cutting is allowed).
-  Implemented as allowed.
-- If the trump maker's 4-card hand has ≥ 2 cards of the same suit, the
-  indicator's suit is unambiguous if revealed; if they pick a card of a suit
-  they only have once in the first 4, later inspections still work. No
-  action needed; noting for completeness.
-
-## Issues / bugs
-
-None currently open. Four bugs fixed this session (trump-indicator play
-paths + bid4 infinite loop); see commit 2b9e265.
 
 ## Notes for future sessions
 
 - Don't try to build a React-style UI. Vanilla DOM + CSS is faster and more
   readable for this scope.
-- AI decision timing: add 600–1200ms delay so the human sees the action.
+- AI decision timing: 600–1200 ms delay so the human sees the action.
 - The server view filter is the most bug-prone area — always double-check
   that a face-down card doesn't leak its `rank`/`suit` to non-privileged
-  seats.
+  seats. The cutting visibility table in `docs/API.md` is the spec.
+- Bump `package.json#version` whenever you ship a UI- or
+  protocol-affecting change. The `?v=` cache-bust query in `index.html`
+  must always match the file URL pattern; otherwise iOS Safari will serve
+  the old `client.js` indefinitely.
