@@ -821,25 +821,26 @@ button { cursor: pointer; }
  * the ONLY child (rare corner cases). */
 .your-hand .indicator-slot + .card { margin-left: 0; }
 
-/* Opponent indicator (v2.2.14) — HORIZONTAL pill layout: a gold
- * "TRUMP" badge beside a micro-sized card. Prior vertical layout
- * (badge stacked above a small card) ate ~80 px of row-1 height
- * on the top seat, squeezing the trick row on short phones.
- * Horizontal variant is ~28 px tall and sits inline with the seat
- * name row. Flip animation on the `.closed → .open` class swap is
- * preserved. */
+/* v2.2.21: tightened so the pill (badge + mini card + padding) never
+ * exceeds ~74 px, well inside the 80 px side column. max-width is a
+ * safety cap — `overflow: hidden` on .play-area would clip anything
+ * wider, which is exactly what was happening on AI 3 when the pill
+ * grew an "· open" suffix. */
 .seat-indicator {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin: 2px auto 4px;
-  padding: 2px 6px 2px 4px;
-  background: rgba(0, 0, 0, 0.35);
+  padding: 2px 5px 2px 4px;
+  background: rgba(0, 0, 0, 0.4);
   border: 1px solid var(--gold);
   border-radius: 999px;
   position: relative;
   perspective: 400px;
+  max-width: 74px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .seat-indicator .seat-indicator-badge {
   font-size: 9px;
@@ -906,8 +907,12 @@ button { cursor: pointer; }
  * `justify-self: stretch` so the seat-slot fills the 88 px column —
  * the label pills can spread full width instead of being clipped by
  * the previous `start` / `end` self-sizing against a narrower cell. */
-.seat-left  { grid-column: 1; grid-row: 2; justify-self: stretch; align-self: stretch; max-height: 100%; justify-content: flex-start; padding-top: 4px; }
-.seat-right { grid-column: 3; grid-row: 2; justify-self: stretch; align-self: stretch; max-height: 100%; justify-content: flex-start; padding-top: 4px; }
+/* v2.2.21: padding-top 4 → 8 so the side name pill has visible
+ * breathing room at the top of its cell — prior 4 px had the pill's
+ * upper border flush with the play-area's overflow:hidden boundary
+ * on shorter phones. */
+.seat-left  { grid-column: 1; grid-row: 2; justify-self: stretch; align-self: stretch; max-height: 100%; justify-content: flex-start; padding: 8px 4px 0; }
+.seat-right { grid-column: 3; grid-row: 2; justify-self: stretch; align-self: stretch; max-height: 100%; justify-content: flex-start; padding: 8px 4px 0; }
 .seat-bottom { flex-shrink: 0; }
 
 /* v2.2.15: player-name and bid labels are decorated pills in the play
@@ -923,16 +928,20 @@ button { cursor: pointer; }
   margin-bottom: 6px;
   padding: 4px 12px;
   text-align: center;
-  max-width: 128px;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.32) 100%);
-  border: 1px solid rgba(230, 200, 106, 0.26);
+  background: linear-gradient(180deg, rgba(12,28,18,0.92) 0%, rgba(6,18,12,0.85) 100%);
+  /* v2.2.21: border strengthened 0.26 → 0.55 opacity so the pill always
+   * reads as a crisp, complete oval against the felt — earlier screenshots
+   * showed the pill top looking "cut" because the 26% gold was barely
+   * discernible from the felt gradient. */
+  border: 1px solid rgba(230, 200, 106, 0.55);
   border-radius: 999px;
   box-shadow:
-    0 1px 2px rgba(0,0,0,0.4),
-    inset 0 1px 0 rgba(255,255,255,0.06);
+    0 2px 4px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.08);
   transition: border-color 180ms ease, box-shadow 180ms ease, color 180ms ease;
 }
 .seat-name.active {
@@ -951,7 +960,12 @@ button { cursor: pointer; }
   display: flex;
   gap: 2px;
   align-items: center;
-  justify-content: center;
+  /* v2.2.21: static positioning — the horizontal back stack now hugs
+   * the LEFT edge of its slot (prior `center` re-centred every play,
+   * visibly shifting the remaining backs). The slot itself is already
+   * centred inside its column via .seat-slot align-items, so the
+   * stack still reads as centred when full. */
+  justify-content: flex-start;
   min-height: 0;
   min-width: 0;
 }
@@ -1122,16 +1136,21 @@ button { cursor: pointer; }
   display: flex;
   flex-direction: row;
   align-self: stretch;
-  /* `safe center` centers the hand when it fits, but falls back to
-   * left-align when cards overflow — prevents the left-most cards from
-   * being scrolled off-screen (the failure mode of plain `center`). */
-  justify-content: safe center;
+  /* v2.2.21: the old `safe center` recentred the row every time a
+   * card was played, so every remaining card drifted a few pixels —
+   * reading as "the playing surface is bouncing". Now cards are
+   * pinned to a left-aligned start with a symmetric padding so the
+   * hand reads as centered when full AND stable when cards leave. */
+  justify-content: flex-start;
   overflow-x: auto;
   overflow-y: hidden;
   /* v2.2.9: extra top padding accommodates the indicator-slot's badge
    * (~14 px). Bottom padding unchanged. min-height covers padding +
-   * card height so overflow-y:hidden doesn't clip the bottom corner. */
-  padding: 18px 8px 6px;
+   * card height so overflow-y:hidden doesn't clip the bottom corner.
+   * v2.2.21: horizontal padding uses max() so the hand is centred
+   * on wide phones (8 cards ≈ 354 px; viewport 390+) while never
+   * dropping below the 8 px min on narrow ones. */
+  padding: 18px max(8px, calc((100% - 356px) / 2)) 6px;
   gap: 0;
   min-height: calc(var(--card-h) + 28px);
   scrollbar-width: thin;

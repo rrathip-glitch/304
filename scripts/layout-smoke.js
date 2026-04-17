@@ -69,8 +69,8 @@ assert(
   'body has overflow-x: hidden — page-level horizontal scroll is impossible',
 );
 assert(
-  /justify-content:\s*safe center/.test(css),
-  'your-hand uses safe-center justification (left-most cards stay tappable on overflow)',
+  /\.your-hand\s*\{[\s\S]*?justify-content:\s*flex-start/.test(css),
+  'your-hand uses flex-start (v2.2.21: pinned so remaining cards do not drift)',
 );
 assert(
   /\.maker-peek/.test(css),
@@ -89,14 +89,14 @@ assert(
 const html = read('public/index.html');
 assert(/id="your-hand"/.test(html), 'index.html has the player hand slot (v2.2.10 also hosts the inline indicator)');
 assert(/id="phase-banner"/.test(html), 'index.html has the phase banner');
-assert(/v=2\.2\.20/.test(html), 'index.html uses semver cache-bust marker (v2.2.20)');
+assert(/v=2\.2\.21/.test(html), 'index.html uses semver cache-bust marker (v2.2.21)');
 assert(/id="bid-readout"/.test(html), 'index.html has the header bid-readout (v2.2.19 replaces the bid-strip)');
 
 // -- Client behavior checks (parse client.js for the expected hooks) -------
 const client = read('public/client.js');
 assert(
-  /BUILD\s*=\s*'2\.2\.20'/.test(client),
-  'client.js declares BUILD = "2.2.20" (semver, not codename)',
+  /BUILD\s*=\s*'2\.2\.21'/.test(client),
+  'client.js declares BUILD = "2.2.21" (semver, not codename)',
 );
 assert(
   /isTappable\s*=\s*legalIds\.has\(indicatorCard\.id\)/.test(client),

@@ -19,7 +19,7 @@
   // ---- Build stamp & debug overlay -----------------------------------------
   // Standard semver. Bumped on every shipped build so the in-app diagnostics
   // overlay (and /version endpoint) clearly identifies which client is live.
-  const BUILD = '2.2.20';
+  const BUILD = '2.2.21';
   console.log('[304] client build =', BUILD);
   const dbgEvents = [];
   function dbg(msg) {
@@ -938,7 +938,10 @@
 
         const badge = document.createElement('span');
         badge.className = 'seat-indicator-badge';
-        badge.textContent = isOpen ? 'Trump · open' : 'Trump';
+        // v2.2.21: always "TRUMP" — the face-up flip IS the open reveal,
+        // so the "· open" suffix was redundant AND made the pill wider
+        // than the 80 px side column (overflowing off-screen on AI 3).
+        badge.textContent = 'Trump';
         indEl.appendChild(badge);
 
         let cardEl;
